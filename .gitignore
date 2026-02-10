@@ -5,3 +5,6 @@
 
 # Dipendenze
 node_modules/
+
+# File caricati dagli utenti (persistiti sul server, non in repo)
+uploads/
