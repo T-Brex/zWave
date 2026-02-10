@@ -1,0 +1,7 @@
+# Environment variables (segreti / configurazione locale)
+.env
+.env.*
+!.env.example
+
+# Dipendenze
+node_modules/

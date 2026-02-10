@@ -1,0 +1,36 @@
+{
+  "name": "@zwaveagency/directus-ia-module",
+  "version": "1.0.0",
+  "description": "Modulo IA per Directus",
+  "type": "module",
+  "scripts": {
+    "build": "directus-extension build",
+    "prebuild": "node scripts/embed-calendario-assets.cjs",
+    "embed-assets": "node scripts/embed-calendario-assets.cjs"
+  },
+  "keywords": [
+    "directus",
+    "directus-extension",
+    "directus-module"
+  ],
+  "directus:extension": {
+    "type": "module",
+    "path": "dist/index.js",
+    "source": "src/index.js",
+    "host": "^10.0.0 || ^11.0.0"
+  },
+  "peerDependencies": {
+    "vue": "^3.2.0 || ^3.4.0"
+  },
+  "devDependencies": {
+    "@directus/extensions-sdk": "^17.0.4"
+  },
+  "dependencies": {
+    "@heroicons/vue": "^2.2.0",
+    "mammoth": "^1.11.0",
+    "papaparse": "^5.5.3",
+    "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "^5.4.530",
+    "xlsx": "^0.18.5"
+  }
+}

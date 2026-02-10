@@ -1,0 +1,32 @@
+{
+  "name": "directus-extension-conversazioni",
+  "version": "1.0.0",
+  "description": "Modulo Conversazioni per Directus",
+  "type": "module",
+  "keywords": [
+    "directus",
+    "directus-extension",
+    "directus-custom-module"
+  ],
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "directus:extension": {
+    "type": "module",
+    "path": "dist/index.js",
+    "source": "src/index.js",
+    "host": "^10.0.0"
+  },
+  "scripts": {
+    "build": "directus-extension build",
+    "dev": "directus-extension build -w --no-minify"
+  },
+  "devDependencies": {
+    "@directus/extensions-sdk": "10.1.0",
+    "vue": "^3.2.47"
+  },
+  "peerDependencies": {
+    "vue": "^3.2.47"
+  }
+}

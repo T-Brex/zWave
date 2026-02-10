@@ -1,0 +1,31 @@
+version: '4'
+services:
+  database:
+    image: postgis/postgis:17-3.5
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    # Qui diciamo al database di usare le variabili del file .env
+    # Nota: Le variabili POSTGRES_... devono corrispondere a DB_USER/DB_PASSWORD/DB_DATABASE
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE}
+      EXTENSIONS_AUTO_RELOAD: "true" 
+
+  directus:
+    image: directus/directus:latest
+    ports:
+      - 8055:8055
+    volumes:
+      - ./uploads:/directus/uploads
+      - ./extensions:/directus/extensions
+    depends_on:
+      - database
+    # Questo comando carica tutto il file .env dentro Directus
+    env_file:
+      - .env
+
+volumes:
+  postgres_data:
