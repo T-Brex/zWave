@@ -1,0 +1,26 @@
+# Git e IDE
+.git
+.gitignore
+.cursor
+.vscode
+*.md
+!extensions/**/*.md
+
+# Env e segreti
+.env
+.env.*
+!.env.example
+
+# Non servono per la build dell'immagine Directus (il Dockerfile serve, non escluderlo)
+docker-compose.yml
+init-db
+uploads
+node_modules
+**/node_modules
+
+# Riduce contesto di build (estensioni: tieni solo ciò che serve a runtime)
+**/.DS_Store
+**/dist
+**/*.log
+**/npm-debug*
+**/.npm

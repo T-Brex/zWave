@@ -3,29 +3,16 @@
 Guida per collegare questa repo a Easypanel e avere tutto funzionante online.
 
 ---
-## Immagine Docker
-   directus/directus:11.14.1
+
 ## 0. Già online? Aggiungere la repo GitHub senza rompere nulla
 
 Se hai **già** un deploy Easypanel funzionante (Directus + DB su Hostinger o altro) e vuoi solo **aggiungere questa repo GitHub come sorgente** (per auto-deploy o per usare il `docker-compose.yml` da Git):
 
 1. **Backup preventivo (consigliato)**  
-   - In Easypanel: esporta le variabili d’ambiente del progetto (copia-incolla in un file locale).  
+   - In Easypanel: esporta le variabili d’ambiente del progetto (copia-incolla in un file locale sul tuo PC, non in questo file).  
 
 
-KEY=20f92c4c08d9893aa2dbc280ab0732e1d2c265ceadfcdc8d
-SECRET=fcacbf50f652a6974663608da2c5dc4a48d9745fcff63546
-DB_CLIENT=postgres
-DB_HOST=$(PROJECT_NAME)_directus-db
-DB_PORT=5432
-DB_DATABASE=$(PROJECT_NAME)
-DB_USER=postgres
-DB_PASSWORD=1d2682bf0ed2d39e2ef6
-CACHE_ENABLED=false
-CACHE_STORE=redis
-REDIS=redis://default:2e73fab0a572332d0204@$(PROJECT_NAME)_directus-redis:6379
-ADMIN_EMAIL=pin.dav@libero.it
-ADMIN_PASSWORD=Test123!
+*(Non inserire qui le tue variabili: contengono segreti. Tienile solo in Easypanel o in un file locale sul tuo PC.)*
 
 
 
@@ -145,3 +132,26 @@ Genera `KEY` e `SECRET` con uno strumento a caso (es. `openssl rand -hex 32`).
 - [ ] Deploy eseguito; dominio e porta (8055) configurati se serve.
 
 Dopo il primo deploy, gli script in `init-db/` vengono eseguiti solo alla prima creazione del volume del DB; le estensioni in `extensions/` vengono usate dal container Directus tramite il volume definito nel `docker-compose.yml`.
+
+---
+
+## 6. Troubleshooting: "Distribuisci" che carica all'infinito
+
+Se clicchi **Distribuisci** e la pagina resta in caricamento:
+
+1. **Controlla i log di build**  
+   In Easypanel apri l’app → **Deploy** (o **Build**) e cerca **Log** / **Build logs**. Verifica se:
+   - la clone della repo va a buon fine;
+   - la build Docker parte e dove si ferma (errore di rete, memoria, Dockerfile non trovato, ecc.).
+
+2. **La prima build può durare diversi minuti**  
+   Scaricare l’immagine base `directus/directus` e copiare la cartella `extensions/` richiede tempo. Attendi almeno 5–10 minuti prima di considerarla bloccata.
+
+3. **Ridurre il contesto di build**  
+   Nella repo è presente un file **`.dockerignore`** che esclude `.git`, `node_modules`, documentazione, ecc. Fai push di `.dockerignore` e riesegui il deploy: la build sarà più veloce e meno soggetta a timeout.
+
+4. **Prova senza build (solo immagine)**  
+   Per verificare che il problema sia la build e non la rete/permessi: in **Sorgente** passa temporaneamente a **Immagine Docker** con `directus/directus:latest`. Se il deploy va a buon fine, il blocco è sulla build da GitHub (clone lento, build timeout, risorse server). Torna poi a **Github** + **Dockerfile** quando hai controllato i log.
+
+5. **Risorse server (Hostinger)**  
+   Su piani condivisi la build può andare in timeout o out-of-memory. In Easypanel controlla se ci sono limiti di tempo o memoria per la build; in caso aumenta temporaneamente le risorse o esegui la build in orari di minor carico.
