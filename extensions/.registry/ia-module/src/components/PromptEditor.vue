@@ -11,27 +11,39 @@
           @focus="startPromptEdit"
         />
 
-        <div class="prompt-actions">
+        <div class="prompt-toolbar">
           <button
-            class="btn-ghost"
+            class="history-trigger"
             type="button"
-            :disabled="!promptEditing"
-            @click="cancelPromptEdit"
+            :disabled="historyLoading"
+            @click="openHistoryPanel"
+            aria-label="Storico prompt"
           >
-            Annulla
+            <v-icon name="history" class="history-trigger-icon" />
           </button>
-          <button
-            class="btn-primary"
-            type="button"
-            :class="{ 'btn-success': promptSaved }"
-            :disabled="!promptEditing"
-            @click="handleSavePrompt"
-          >
-            {{ promptSaved ? 'Salvato' : 'Salva' }}
-          </button>
+
+          <div class="prompt-actions">
+            <button
+              class="btn-ghost"
+              type="button"
+              :disabled="!promptEditing"
+              @click="cancelPromptEdit"
+            >
+              Annulla
+            </button>
+            <button
+              class="btn-primary"
+              type="button"
+              :class="{ 'btn-success': promptSaved }"
+              :disabled="!promptEditing"
+              @click="handleSavePrompt"
+            >
+              {{ promptSaved ? 'Salvato' : 'Salva' }}
+            </button>
+          </div>
         </div>
 
-        <h3 class="prompt-title">Primo Messaggio</h3>
+        <h3 class="prompt-title prompt-title--first-message">Primo Messaggio</h3>
         <textarea
           v-model="firstMessageDisplay"
           class="prompt-textarea prompt-textarea--small"
@@ -106,19 +118,13 @@
           </div>
 
           <div class="language-box">
-            <button
-              class="language-trigger"
-              type="button"
-              :disabled="languagesLoading"
-              @click="openDefaultPanel"
-            >
+            <div class="language-trigger language-trigger--static">
               <div class="language-trigger-text">
                 <span class="language-trigger-label">Lingua default</span>
-                <span class="language-trigger-value">{{ defaultLanguageLabel }}</span>
+                <span class="language-trigger-value">Italiano</span>
               </div>
               <span class="language-trigger-badge">Default</span>
-              <span class="language-trigger-icon">›</span>
-            </button>
+            </div>
 
             <button
               class="language-trigger"
@@ -421,16 +427,90 @@
           </div>
         </div>
       </div>
+
+      <div v-if="historyPanelOpen" class="history-overlay">
+        <div class="history-overlay-backdrop" @click="closeHistoryPanel"></div>
+        <div class="history-panel-drawer">
+          <div class="history-panel-header">
+            <h4 class="history-panel-title">Storico Prompt</h4>
+            <button class="history-panel-close" type="button" @click="closeHistoryPanel">
+              ×
+            </button>
+          </div>
+          <div class="history-panel-body">
+            <div v-if="historyLoading" class="history-hint">Caricamento storico...</div>
+            <div v-else-if="historyError" class="history-error">{{ historyError }}</div>
+            <div v-else-if="!historyItems.length" class="history-empty">
+              Nessuna versione salvata.
+            </div>
+            <button
+              v-for="item in historyItems"
+              :key="item.id"
+              class="history-card"
+              type="button"
+              @click="openHistoryModal(item)"
+            >
+              <div class="history-card-preview">
+                {{ item.testo_prompt || 'Prompt vuoto' }}
+              </div>
+              <div class="history-card-date">{{ formatHistoryDate(item.date_created) }}</div>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="historyModalOpen" class="history-modal">
+        <div class="history-modal-backdrop" @click="closeHistoryModal"></div>
+        <div class="history-modal-card">
+          <div class="history-modal-header">
+            <div>
+              <h4 class="history-modal-title">Storico Prompt</h4>
+              <div class="history-modal-subtitle">
+                Versione {{ formatHistoryDate(historySelected?.date_created) }}
+              </div>
+            </div>
+            <button class="history-modal-close" type="button" @click="closeHistoryModal">
+              ×
+            </button>
+          </div>
+          <div class="history-modal-content">
+            <div class="history-modal-text">
+              {{ historySelected?.testo_prompt || 'Prompt vuoto' }}
+            </div>
+          </div>
+          <div class="history-modal-actions">
+            <button
+              class="history-action history-action--delete"
+              type="button"
+              :disabled="historyWorking"
+              @click="handleDeleteHistory"
+            >
+              Elimina
+            </button>
+            <button
+              class="history-action history-action--restore"
+              type="button"
+              :disabled="historyWorking"
+              @click="handleRestoreHistory"
+            >
+              Ripristina
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { usePrompt } from '../composables/usePrompt';
+import { usePromptHistory } from '../composables/usePromptHistory';
 import { injectAzienda } from '../composables/useAzienda';
 import { useApi } from '@directus/extensions-sdk';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { onBeforeRouteLeave } from 'vue-router';
 
+const emit = defineEmits(['unsaved-change']);
 const aziendaContext = injectAzienda();
 const selectedAzienda = aziendaContext.selectedAzienda;
 const api = useApi();
@@ -455,6 +535,32 @@ const {
   savePrompt,
   saveFirstMessage,
 } = usePrompt(selectedAzienda);
+
+const {
+  historyItems,
+  historyLoading,
+  historyError,
+  loadHistory,
+  softDeleteHistory,
+  restorePromptFromHistory,
+} = usePromptHistory(selectedAzienda);
+
+const historyPanelOpen = ref(false);
+const historyModalOpen = ref(false);
+const historySelected = ref(null);
+const historyWorking = ref(false);
+
+const hasUnsavedChanges = computed(
+  () => promptEditing.value || firstMessageEditing.value
+);
+
+watch(
+  () => hasUnsavedChanges.value,
+  (value) => {
+    emit('unsaved-change', value);
+  },
+  { immediate: true }
+);
 
 const voices = ref([]);
 const voiceLoading = ref(false);
@@ -823,6 +929,72 @@ function closeDetectPanel() {
   detectPanelOpen.value = false;
 }
 
+function formatHistoryDate(value) {
+  if (!value) return '-';
+  try {
+    return new Intl.DateTimeFormat('it-IT', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(value));
+  } catch (e) {
+    return String(value);
+  }
+}
+
+async function openHistoryPanel() {
+  historyPanelOpen.value = true;
+  await loadHistory();
+}
+
+function closeHistoryPanel() {
+  historyPanelOpen.value = false;
+}
+
+function openHistoryModal(item) {
+  historySelected.value = item;
+  historyModalOpen.value = true;
+}
+
+function closeHistoryModal() {
+  historyModalOpen.value = false;
+  historySelected.value = null;
+}
+
+async function handleDeleteHistory() {
+  if (!historySelected.value?.id || historyWorking.value) return;
+  historyWorking.value = true;
+  try {
+    await softDeleteHistory(historySelected.value.id);
+    closeHistoryModal();
+    await loadHistory();
+  } finally {
+    historyWorking.value = false;
+  }
+}
+
+async function handleRestoreHistory() {
+  if (!historySelected.value || historyWorking.value) return;
+  if (!promptId.value) {
+    promptError.value = 'Prompt non disponibile';
+    return;
+  }
+  historyWorking.value = true;
+  try {
+    await restorePromptFromHistory({
+      promptId: promptId.value,
+      testo_prompt: historySelected.value.testo_prompt || '',
+      azienda: selectedAzienda?.value || '',
+    });
+    promptValue.value = historySelected.value.testo_prompt || '';
+    promptDraft.value = promptValue.value;
+    promptEditing.value = false;
+    closeHistoryModal();
+    closeHistoryPanel();
+  } finally {
+    historyWorking.value = false;
+  }
+}
+
 function onAudioLoaded() {
   audioDuration.value = audioRef.value?.duration || 0;
 }
@@ -863,6 +1035,7 @@ async function handleSavePrompt() {
   await savePrompt();
   if (!promptError.value && !promptEditing.value) {
     promptSavedTimer = setSaved(promptSaved, promptSavedTimer);
+    await loadHistory();
   }
 }
 
@@ -1052,7 +1225,8 @@ async function loadLingueAgente() {
 
 async function hydrateLingueCliente() {
   const data = await loadLingueAgente();
-  const defaultCode = data?.lingua_default ? String(data.lingua_default) : 'it';
+  // Forziamo sempre l'italiano come lingua di default
+  const defaultCode = 'it';
   const extras = normalizeLanguageCodes(data?.lingue_extra || [], defaultCode);
   defaultLanguageCode.value = defaultCode;
   extraLanguageCodes.value = extras;
@@ -1180,6 +1354,28 @@ onMounted(() => {
   hydrateLingueCliente();
 });
 
+function handleBeforeUnload(event) {
+  if (!hasUnsavedChanges.value) return;
+  event.preventDefault();
+  event.returnValue = '';
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', handleBeforeUnload);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload);
+});
+
+onBeforeRouteLeave((_to, _from, next) => {
+  if (!hasUnsavedChanges.value) return next();
+  const confirmed = window.confirm(
+    'Non hai salvato i tuoi cambiamenti, sei sicuro di voler uscire?'
+  );
+  next(confirmed);
+});
+
 // Ricarica prompt e voce quando cambia l'azienda
 watch(
   () => selectedAzienda?.value,
@@ -1203,6 +1399,10 @@ watch(
     loadVoices();
     loadLingue();
     hydrateLingueCliente();
+    historySelected.value = null;
+    if (historyPanelOpen.value) {
+      loadHistory();
+    }
   },
   { immediate: true }
 );
@@ -1223,6 +1423,29 @@ watch(selectedVoiceAudioUrl, () => {
   padding: 40px;
   max-width: 1400px;
   margin: 0 auto;
+}
+
+.prompt-view button {
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 10px;
+}
+
+.prompt-view .voice-panel-close,
+.prompt-view .language-panel-close,
+.prompt-view .detect-panel-close,
+.prompt-view .history-panel-close,
+.prompt-view .history-modal-close {
+  font-size: 20px;
+}
+
+.prompt-view .btn-primary,
+.prompt-view .btn-ghost,
+.prompt-view .history-trigger,
+.prompt-view .voice-save {
+  height: auto;
+  padding: 6px 14px;
+  border-radius: 10px;
 }
 
 .prompt-layout {
@@ -1249,8 +1472,13 @@ watch(selectedVoiceAudioUrl, () => {
   letter-spacing: -0.02em;
 }
 
+.prompt-title--first-message {
+  margin-top: 0;
+  padding-top: 30px;
+}
+
 .prompt-title + .prompt-textarea {
-  margin-bottom: 24px;
+  margin-bottom: 0;
 }
 
 .prompt-textarea {
@@ -1288,8 +1516,54 @@ watch(selectedVoiceAudioUrl, () => {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 20px;
-  margin-bottom: 40px;
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.prompt-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.prompt-toolbar .prompt-actions {
+  margin: 0;
+}
+
+.history-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color-subdued, #e5e7eb);
+  background: #ffffff;
+  color: #4c1d95;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.history-trigger:hover {
+  border-color: #4c1d95;
+  box-shadow: 0 4px 10px rgba(76, 29, 149, 0.2);
+}
+
+.history-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.history-trigger-icon {
+  font-size: 16px;
+  color: #4c1d95;
+}
+
+.history-trigger-icon :deep(svg) {
+  stroke-width: 1.5;
 }
 
 .prompt-error {
@@ -1854,6 +2128,14 @@ watch(selectedVoiceAudioUrl, () => {
   box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
 }
 
+.language-trigger--static {
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  cursor: default;
+}
+
 .language-trigger:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -2232,5 +2514,213 @@ watch(selectedVoiceAudioUrl, () => {
   .prompt-sidebar {
     width: 100%;
   }
+}
+
+.history-overlay,
+.history-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+}
+
+.history-overlay {
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+}
+
+.history-overlay-backdrop,
+.history-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.history-panel-drawer {
+  position: relative;
+  width: min(420px, 33vw);
+  height: 100%;
+  background: #ffffff;
+  border-radius: 20px 0 0 20px;
+  box-shadow: -20px 0 40px rgba(15, 23, 42, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.history-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color-subdued, #e5e7eb);
+}
+
+.history-panel-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.history-panel-close {
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+  color: var(--foreground-subdued, #6b7280);
+}
+
+.history-panel-body {
+  flex: 1;
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+}
+
+.history-hint,
+.history-empty {
+  color: var(--foreground-subdued, #6b7280);
+  font-size: 14px;
+}
+
+.history-error {
+  color: #ef4444;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.history-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color-subdued, #e5e7eb);
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+.history-card:hover {
+  border-color: var(--primary, #5e72e4);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+}
+
+.history-card-preview {
+  flex: 1;
+  font-size: 14px;
+  color: var(--foreground, #1a1a1a);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.history-card-date {
+  font-size: 12px;
+  color: var(--foreground-subdued, #6b7280);
+  white-space: nowrap;
+}
+
+.history-modal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.history-modal-card {
+  position: relative;
+  width: min(760px, 95vw);
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.history-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.history-modal-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.history-modal-subtitle {
+  margin-top: 4px;
+  color: var(--foreground-subdued, #6b7280);
+  font-size: 13px;
+}
+
+.history-modal-close {
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+  color: var(--foreground-subdued, #6b7280);
+}
+
+.history-modal-content {
+  background: #f8fafc;
+  border: 1px solid var(--border-color-subdued, #e5e7eb);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.history-modal-text {
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--foreground, #1a1a1a);
+  max-height: 45vh;
+  overflow: auto;
+}
+
+.history-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.history-action {
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.history-action--delete {
+  border: 1px solid #ef4444;
+  background: transparent;
+  color: #ef4444;
+}
+
+.history-action--restore {
+  border: 1px solid #5e72e4;
+  background: #5e72e4;
+  color: #ffffff;
+}
+
+.history-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>
