@@ -1,8 +1,8 @@
 import ModuleComponent from './module.vue';
 
 export default {
-	id: 'custom',
-	name: 'Custom',
+	id: 'vincenzo',
+	name: 'Vincenzo',
 	icon: 'box',
 	routes: [
 		{
