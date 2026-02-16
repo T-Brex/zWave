@@ -1,17 +1,5 @@
 <template>
-  <private-view>
-    <template #title>
-      <div class="module-header">
-        <div class="module-icon-wrapper">
-          <v-icon name="checklist" class="module-icon" />
-        </div>
-        <div class="module-title-content">
-          <span class="module-subtitle">Contenuti</span>
-          <h1 class="module-title">Task</h1>
-        </div>
-      </div>
-    </template>
-
+  <private-view title="Task">
     <template #navigation>
       <v-list nav>
         <v-list-item
@@ -53,17 +41,16 @@
       </v-list>
     </template>
 
-    <AziendeDrawer
-      v-model="drawerOpen"
-      :available-aziende="availableAziende"
-      :selected-azienda="selectedAzienda"
-      :loading="loadingAziende"
-      :error="aziendeError"
-      @select="handleSelectAzienda"
-      @refresh="loadAziende"
-    />
+    <template #actions>
+      <CompanySelector
+        v-model="selectedClientId"
+        @selected="onAziendaSelected"
+      />
+    </template>
 
-    <div class="tasks-dashboard">
+    <div class="task-module-root">
+      <div class="header-separator" />
+      <div class="tasks-dashboard">
       <v-info
         v-if="tasksError"
         type="danger"
@@ -79,18 +66,6 @@
 
       <div v-else class="tasks-content">
         <div class="tasks-topbar">
-          <v-button
-            class="azienda-select-button"
-            :secondary="!!selectedAzienda"
-            :type="selectedAzienda ? 'secondary' : 'primary'"
-            @click="drawerOpen = true"
-          >
-            <v-icon name="business" left />
-            <span class="azienda-button-text">
-              {{ selectedAzienda || 'Seleziona azienda' }}
-            </span>
-            <v-icon name="arrow_drop_down" right />
-          </v-button>
           <div class="view-toggle">
             <button
               :class="['view-button', { active: viewMode === 'table' }]"
@@ -142,9 +117,13 @@
                   <label class="filter-label">Azione</label>
                   <select v-model="filterAction" class="filter-select">
                     <option value="all">Tutte</option>
-                    <option value="richiamare">Richiamare</option>
-                    <option value="visita">Visita</option>
-                    <option value="appuntamento">Appuntamento</option>
+                    <option
+                      v-for="opt in taskTypeOptions"
+                      :key="opt.value"
+                      :value="opt.value"
+                    >
+                      {{ opt.label }}
+                    </option>
                   </select>
                 </div>
                   <div class="filter-row">
@@ -206,49 +185,49 @@
                       </div>
                     </div>
                   </div>
-                  <div class="filter-row">
-                    <label class="filter-label">Data creazione</label>
-                    <div class="filter-date-range">
-                      <div class="filter-date-single">
-                        <input
-                          :value="filterCreatedFromDisplay"
-                          class="filter-input filter-date-input"
-                          type="text"
-                          placeholder="Da (gg/MM/aaaa)"
-                          @input="updateCreatedDateText($event.target.value, 'from')"
-                        />
-                        <input
-                          ref="filterCreatedFromRef"
-                          :value="filterCreatedFrom"
-                          class="filter-date-hidden"
-                          type="date"
-                          @input="updateCreatedDatePicker($event.target.value, 'from')"
-                        />
-                        <button class="filter-date-button" type="button" @click="openCreatedDatePicker('from')">
-                          <v-icon name="calendar_today" />
-                        </button>
-                      </div>
-                      <div class="filter-date-single">
-                        <input
-                          :value="filterCreatedToDisplay"
-                          class="filter-input filter-date-input"
-                          type="text"
-                          placeholder="A (gg/MM/aaaa)"
-                          @input="updateCreatedDateText($event.target.value, 'to')"
-                        />
-                        <input
-                          ref="filterCreatedToRef"
-                          :value="filterCreatedTo"
-                          class="filter-date-hidden"
-                          type="date"
-                          @input="updateCreatedDatePicker($event.target.value, 'to')"
-                        />
-                        <button class="filter-date-button" type="button" @click="openCreatedDatePicker('to')">
-                          <v-icon name="calendar_today" />
-                        </button>
-                      </div>
+                <div class="filter-row">
+                  <label class="filter-label">Data creazione</label>
+                  <div class="filter-date-range">
+                    <div class="filter-date-single">
+                      <input
+                        :value="filterCreatedFromDisplay"
+                        class="filter-input filter-date-input"
+                        type="text"
+                        placeholder="Da (gg/MM/aaaa)"
+                        @input="updateCreatedDateText($event.target.value, 'from')"
+                      />
+                      <input
+                        ref="filterCreatedFromRef"
+                        :value="filterCreatedFrom"
+                        class="filter-date-hidden"
+                        type="date"
+                        @input="updateCreatedDatePicker($event.target.value, 'from')"
+                      />
+                      <button class="filter-date-button" type="button" @click="openCreatedDatePicker('from')">
+                        <v-icon name="calendar_today" />
+                      </button>
+                    </div>
+                    <div class="filter-date-single">
+                      <input
+                        :value="filterCreatedToDisplay"
+                        class="filter-input filter-date-input"
+                        type="text"
+                        placeholder="A (gg/MM/aaaa)"
+                        @input="updateCreatedDateText($event.target.value, 'to')"
+                      />
+                      <input
+                        ref="filterCreatedToRef"
+                        :value="filterCreatedTo"
+                        class="filter-date-hidden"
+                        type="date"
+                        @input="updateCreatedDatePicker($event.target.value, 'to')"
+                      />
+                      <button class="filter-date-button" type="button" @click="openCreatedDatePicker('to')">
+                        <v-icon name="calendar_today" />
+                      </button>
                     </div>
                   </div>
+                </div>
                 <div class="filter-row">
                   <label class="filter-label">Oggetto richiesta</label>
                   <input v-model="filterProperty" class="filter-input" type="text" placeholder="Cerca oggetto richiesta" />
@@ -259,32 +238,13 @@
           </div>
           <div class="task-toggle">
             <button
-              :class="['task-chip', 'task-chip--yellow', { active: tagFilters.richiamare }]"
+              v-for="opt in taskTypeOptions"
+              :key="opt.value"
+              :class="['task-chip', `task-chip--${opt.pillClass}`, { active: tagFilters[opt.value] }]"
               type="button"
-              @click="tagFilters.richiamare = !tagFilters.richiamare"
+              @click="tagFilters[opt.value] = !tagFilters[opt.value]"
             >
-              Richiamare
-            </button>
-            <button
-              :class="['task-chip', 'task-chip--purple', { active: tagFilters.visita }]"
-              type="button"
-              @click="tagFilters.visita = !tagFilters.visita"
-            >
-              Visita
-            </button>
-            <button
-              :class="['task-chip', 'task-chip--blue', { active: tagFilters.appuntamento }]"
-              type="button"
-              @click="tagFilters.appuntamento = !tagFilters.appuntamento"
-            >
-              Appuntamento
-            </button>
-            <button
-              :class="['task-chip', 'task-chip--gray', { active: tagFilters.altro }]"
-              type="button"
-              @click="tagFilters.altro = !tagFilters.altro"
-            >
-              Altro
+              {{ opt.label }}
             </button>
             <button
               :class="['task-chip', 'task-chip--green', { active: showCompleted }]"
@@ -296,6 +256,7 @@
           </div>
         </div>
 
+        <div class="tasks-body">
         <div v-if="loadingTasks" class="loading">
           <v-progress-circular indeterminate small />
           <span>Caricamento...</span>
@@ -305,7 +266,7 @@
           Nessun task disponibile
         </div>
 
-        <div v-else>
+        <div v-else class="tasks-body-inner">
           <div v-if="viewMode === 'table'" class="tasks-table">
             <div class="tasks-table-header" :style="{ gridTemplateColumns: columnGridTemplate }">
               <span
@@ -343,15 +304,18 @@
                 <select
                   v-if="column.key === 'tag'"
                   v-model="task.type"
-                  :class="['task-tag-select', `task-tag-select--${task.type}`]"
+                  :class="['task-tag-select', taskTagSelectClass(task.type)]"
                   @focus="cacheTaskType(task)"
                   @change="updateTaskTag(task)"
                   @click.stop
                 >
-                  <option value="richiamare">Richiamare</option>
-                  <option value="visita">Visita</option>
-                  <option value="appuntamento">Appuntamento</option>
-                  <option value="altro">Altro</option>
+                  <option
+                    v-for="opt in taskTypeOptions"
+                    :key="opt.value"
+                    :value="opt.value"
+                  >
+                    {{ opt.label }}
+                  </option>
                 </select>
                 <span v-else-if="column.key === 'name'" class="task-text">{{ task.name || 'N/D' }}</span>
                 <span v-else-if="column.key === 'contact'" class="task-text">{{ task.contact || 'N/D' }}</span>
@@ -417,7 +381,7 @@
                   @click="openTaskEditor(task)"
                 >
                   <div class="task-card-title">
-                    <span class="task-pill task-pill--yellow">Richiamare</span>
+                    <span :class="['task-pill', `task-pill--${getTypeConfig(task.type).pillClass}`]">{{ task.label || 'N/D' }}</span>
                     <span class="task-card-name">{{ task.name || 'N/D' }}</span>
                   </div>
                   <div class="task-card-row">
@@ -480,7 +444,7 @@
                   @click="openTaskEditor(task)"
                 >
                   <div class="task-card-title">
-                    <span class="task-pill task-pill--purple">Visita</span>
+                    <span :class="['task-pill', `task-pill--${getTypeConfig(task.type).pillClass}`]">{{ task.label || 'N/D' }}</span>
                     <span class="task-card-name">{{ task.name || 'N/D' }}</span>
                   </div>
                   <div class="task-card-row">
@@ -539,6 +503,7 @@
             </div>
           </div>
         </div>
+        </div>
       </div>
       <v-dialog v-model="showTaskDialog" @esc="closeTaskDialog">
         <v-card class="task-dialog">
@@ -561,10 +526,13 @@
             <div class="task-form-row">
               <label>Tipo</label>
               <select v-model="taskForm.tipo">
-                <option value="Richiamare">Richiamare</option>
-                <option value="Visita">Visita</option>
-                <option value="Appuntamento">Appuntamento</option>
-                <option value="Altro">Altro</option>
+                <option
+                  v-for="opt in taskTypeOptions"
+                  :key="opt.value"
+                  :value="opt.label"
+                >
+                  {{ opt.label }}
+                </option>
               </select>
             </div>
             <div v-if="taskForm.tipo === 'Visita'" class="task-form-row">
@@ -611,10 +579,13 @@
             <div class="task-form-row">
               <label>Tipo</label>
               <select v-model="editForm.tipo" :disabled="editForm.readonly">
-                <option value="Richiamare">Richiamare</option>
-                <option value="Visita">Visita</option>
-                <option value="Appuntamento">Appuntamento</option>
-                <option value="Altro">Altro</option>
+                <option
+                  v-for="opt in taskTypeOptions"
+                  :key="opt.value"
+                  :value="opt.label"
+                >
+                  {{ opt.label }}
+                </option>
               </select>
             </div>
             <div class="task-form-row">
@@ -654,6 +625,7 @@
         </v-card>
       </v-dialog>
     </div>
+    </div>
   </private-view>
 </template>
 
@@ -661,11 +633,20 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useApi } from '@directus/extensions-sdk';
-import AziendeDrawer from '../components/AziendeDrawer.vue';
-import { useAziende } from '../composables/useAziende';
+import CompanySelector from '../../../common/components/CompanySelector.vue';
 import { formatDate, formatTime } from '../utils/conversationUtils';
 
 const TASK_COLLECTION = 'task';
+const TASK_TYPE_FIELD = 'tipo';
+
+/** Configurazione pillole per tipo: pillClass usato per CSS (task-chip--*, task-tag-select--*, task-pill--*) */
+const DEFAULT_TASK_TYPE_CONFIG = {
+  richiamare: { label: 'Richiamare', pillClass: 'yellow' },
+  visita: { label: 'Visita', pillClass: 'purple' },
+  appuntamento: { label: 'Appuntamento', pillClass: 'blue' },
+  altro: { label: 'Altro', pillClass: 'gray' },
+  cancellazione: { label: 'Cancellazione', pillClass: 'red' }
+};
 
 const MANUAL_TASK_FIELDS = {
   name: 'nome',
@@ -691,23 +672,52 @@ const isTableRoute = computed(() => route.path.endsWith('/tabella'));
 const isTaskRoute = computed(() => route.path.endsWith('/task'));
 const isListRoute = computed(() => !isTableRoute.value && !isTaskRoute.value);
 
-const {
-  availableAziende,
-  aziendaUserMap,
-  selectedAzienda,
-  loadingAziende,
-  error: aziendeError,
-  loadAziende,
-  selectAzienda: selectAziendaUtil
-} = useAziende();
+const selectedClientId = ref(null);
+const selectedAzienda = ref(null);
+const selectedClientUserId = ref(null);
 
-const drawerOpen = ref(false);
+function onAziendaSelected(payload) {
+  selectedAzienda.value = payload?.azienda ?? null;
+}
+
+watch(selectedClientId, async (id) => {
+  selectedClientUserId.value = null;
+  if (!id) return;
+  try {
+    const res = await api.get(`/items/clienti/${id}`, { params: { fields: 'id,id_user' } });
+    const data = res.data?.data ?? res.data;
+    const raw = data?.id_user;
+    selectedClientUserId.value = raw?.id ?? raw ?? null;
+  } catch {
+    selectedClientUserId.value = null;
+  }
+});
 const loadingTasks = ref(false);
 const tasksError = ref(null);
 const tasks = ref([]);
 const viewMode = ref('table');
 const searchInput = ref('');
-const tagFilters = ref({ richiamare: true, visita: true, appuntamento: true, altro: true });
+function capitalizeLabel(text) {
+  const t = String(text || '').trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase() : '';
+}
+function buildTaskTypeOptionsFromConfig(config) {
+  return Object.entries(config).map(([value, { label, pillClass }]) => ({
+    value,
+    label: capitalizeLabel(label),
+    pillClass: pillClass || 'gray'
+  }));
+}
+function buildTagFiltersFromOptions(options) {
+  const obj = {};
+  options.forEach(opt => {
+    obj[opt.value] = true;
+  });
+  return obj;
+}
+const defaultOptions = buildTaskTypeOptionsFromConfig(DEFAULT_TASK_TYPE_CONFIG);
+const taskTypeOptions = ref([...defaultOptions]);
+const tagFilters = ref(buildTagFiltersFromOptions(defaultOptions));
 const currentUserId = ref(null);
 const showTaskDialog = ref(false);
 const savingTask = ref(false);
@@ -777,10 +787,7 @@ const draggingTaskId = ref(null);
 const lastTaskType = ref({});
 const showCompleted = ref(true);
 
-const selectedAziendaUserId = computed(() => {
-  if (!selectedAzienda.value) return null;
-  return aziendaUserMap.value?.[selectedAzienda.value] || null;
-});
+const selectedAziendaUserId = computed(() => selectedClientUserId.value);
 const orderedColumns = computed(() => {
   return columnOrder.value
     .map(key => columns.find(column => column.key === key))
@@ -791,13 +798,20 @@ function normalizeAzienda(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+function getTypeConfig(type) {
+  const key = String(type || '').trim().toLowerCase();
+  const known = DEFAULT_TASK_TYPE_CONFIG[key];
+  if (known) return { ...known, label: capitalizeLabel(known.label) };
+  const label = key ? capitalizeLabel(key) : 'Altro';
+  return { label, pillClass: 'gray' };
+}
+function taskTagSelectClass(type) {
+  const pillClass = getTypeConfig(type).pillClass;
+  return `task-tag-select--${pillClass}`;
+}
 const filteredTasks = computed(() => {
   const search = searchInput.value.trim().toLowerCase();
-  const activeTags = [];
-  if (tagFilters.value.richiamare) activeTags.push('richiamare');
-  if (tagFilters.value.visita) activeTags.push('visita');
-  if (tagFilters.value.appuntamento) activeTags.push('appuntamento');
-  if (tagFilters.value.altro) activeTags.push('altro');
+  const activeTags = Object.keys(tagFilters.value).filter(k => tagFilters.value[k]);
 
   if (activeTags.length === 0) return [];
 
@@ -868,26 +882,49 @@ const kanbanColumns = computed(() => ({
   visita: filteredTasks.value.filter(task => task.type === 'visita')
 }));
 
+async function loadTaskTypes() {
+  try {
+    const res = await api.get(`/fields/${TASK_COLLECTION}`);
+    const data = res.data?.data ?? res.data;
+    const list = Array.isArray(data) ? data : [];
+    const tipoField = list.find(f => f.field === TASK_TYPE_FIELD);
+    const choices = tipoField?.options?.choices ?? tipoField?.meta?.options?.choices;
+    if (Array.isArray(choices) && choices.length > 0) {
+      const options = choices.map(c => {
+        const value = (typeof c === 'string' ? c : c.value ?? c.text ?? c).toString().trim().toLowerCase();
+        const rawLabel = typeof c === 'object' && c.text != null ? c.text : (value ? value.charAt(0).toUpperCase() + value.slice(1) : '');
+        const label = capitalizeLabel(rawLabel);
+        const known = DEFAULT_TASK_TYPE_CONFIG[value];
+        const pillClass = (known && known.pillClass) ? known.pillClass : 'gray';
+        return { value, label, pillClass };
+      });
+      const seen = new Set();
+      const merged = [];
+      options.forEach(opt => {
+        if (!opt.value || seen.has(opt.value)) return;
+        seen.add(opt.value);
+        merged.push(opt);
+      });
+      taskTypeOptions.value = merged.length ? merged : defaultOptions;
+      tagFilters.value = buildTagFiltersFromOptions(taskTypeOptions.value);
+    }
+  } catch (_) {
+    taskTypeOptions.value = [...defaultOptions];
+    tagFilters.value = buildTagFiltersFromOptions(defaultOptions);
+  }
+}
 async function loadTasks() {
   loadingTasks.value = true;
   tasksError.value = null;
   try {
     const manualItems = await fetchManualTasks({ includeOptional: true });
-    tasks.value = [
-      ...manualItems
-        .map(item => normalizeManualTask(item))
-        .filter(task => ['richiamare', 'visita', 'appuntamento', 'altro'].includes(task.type))
-    ];
+    tasks.value = manualItems.map(item => normalizeManualTask(item));
   } catch (err) {
     const status = err.response?.status;
     if (status === 400 || status === 403) {
       try {
         const manualItems = await fetchManualTasks({ includeOptional: false });
-        tasks.value = [
-          ...manualItems
-            .map(item => normalizeManualTask(item))
-            .filter(task => ['richiamare', 'visita', 'appuntamento', 'altro'].includes(task.type))
-        ];
+        tasks.value = manualItems.map(item => normalizeManualTask(item));
         tasksError.value = null;
       } catch (fallbackErr) {
         console.error('Errore nel caricamento dei task:', fallbackErr);
@@ -933,24 +970,13 @@ async function fetchManualTasks({ includeOptional }) {
 }
 
 function normalizeManualTask(item) {
-  const rawType = String(item?.[MANUAL_TASK_FIELDS.type] || '').trim().toLowerCase();
-  const type =
-    rawType === 'richiamare'
-      ? 'richiamare'
-      : rawType === 'visita'
-        ? 'visita'
-        : rawType === 'appuntamento'
-          ? 'appuntamento'
-          : '';
+  const rawType = String(item?.[MANUAL_TASK_FIELDS.type] || '').trim();
+  const type = rawType.toLowerCase();
+  const typeConfig = getTypeConfig(type);
   return {
     id: item?.id,
-    type,
-    label:
-      type === 'richiamare'
-        ? 'Richiamare'
-        : type === 'appuntamento'
-          ? 'Appuntamento'
-          : 'Visita',
+    type: type || 'altro',
+    label: typeConfig.label,
     name: item?.[MANUAL_TASK_FIELDS.name] || '',
     contact: item?.[MANUAL_TASK_FIELDS.contact] || '',
     phone: item?.[MANUAL_TASK_FIELDS.phone] || '',
@@ -1070,14 +1096,7 @@ function handleColumnDragEnd() {
   draggingColumnKey.value = null;
 }
 
-async function handleSelectAzienda(azienda) {
-  selectAziendaUtil(azienda);
-  drawerOpen.value = false;
-  await loadTasks();
-}
-
 function retry() {
-  loadAziende();
   loadTasks();
 }
 
@@ -1130,8 +1149,8 @@ async function createTask() {
       const timeValue = taskForm.value.ora;
       const composed = dateValue ? (timeValue ? `${dateValue}T${timeValue}` : dateValue) : null;
       payload[MANUAL_TASK_FIELDS.date] = normalizeDateTimeInput(composed);
-    if (taskForm.value.oggetto_richiesta) {
-      payload[MANUAL_TASK_FIELDS.propertyInfo] = taskForm.value.oggetto_richiesta;
+      if (taskForm.value.oggetto_richiesta) {
+        payload[MANUAL_TASK_FIELDS.propertyInfo] = taskForm.value.oggetto_richiesta;
       }
     }
     if (taskForm.value.telefono) {
@@ -1163,14 +1182,7 @@ function openTaskEditor(task) {
     telefono: task.phone || '',
     data: task.rawVisitDate ? toISODate(task.rawVisitDate) : '',
     ora: task.rawVisitDate ? toLocalTime(task.rawVisitDate) : '',
-    tipo:
-      task.type === 'visita'
-        ? 'Visita'
-        : task.type === 'appuntamento'
-          ? 'Appuntamento'
-          : task.type === 'richiamare'
-            ? 'Richiamare'
-            : 'Altro',
+    tipo: getTypeConfig(task.type).label,
     oggetto_richiesta: task.propertyInfo || '',
     note: task.note || '',
     readonly: false,
@@ -1377,28 +1389,13 @@ async function toggleCompleted(task) {
 async function updateTaskTag(task) {
   if (!task?.id) return;
   const previousType = lastTaskType.value[task.id] || task.type;
-  const nextValue =
-    task.type === 'visita'
-      ? 'Visita'
-      : task.type === 'appuntamento'
-        ? 'Appuntamento'
-        : 'Richiamare';
+  const labelToSave = getTypeConfig(task.type).label;
   try {
-    await updateManualTask(task.id, { [MANUAL_TASK_FIELDS.type]: nextValue });
-    task.label =
-      task.type === 'richiamare'
-        ? 'Richiamare'
-        : task.type === 'appuntamento'
-          ? 'Appuntamento'
-          : 'Visita';
+    await updateManualTask(task.id, { [MANUAL_TASK_FIELDS.type]: labelToSave });
+    task.label = labelToSave;
   } catch (err) {
     task.type = previousType;
-    task.label =
-      previousType === 'richiamare'
-        ? 'Richiamare'
-        : previousType === 'appuntamento'
-          ? 'Appuntamento'
-          : 'Visita';
+    task.label = getTypeConfig(previousType).label;
     console.error('Errore aggiornamento tag:', err);
   }
 }
@@ -1418,18 +1415,14 @@ async function handleDrop(targetType) {
   draggingTaskId.value = null;
   if (!task || task.type === targetType) return;
   const previousType = task.type;
+  const labelToSave = getTypeConfig(targetType).label;
   task.type = targetType;
-  task.label = targetType === 'richiamare' ? 'Richiamare' : 'Visita';
+  task.label = labelToSave;
   try {
-    await updateManualTask(task.id, { [MANUAL_TASK_FIELDS.type]: task.label });
+    await updateManualTask(task.id, { [MANUAL_TASK_FIELDS.type]: labelToSave });
   } catch (err) {
     task.type = previousType;
-    task.label =
-      previousType === 'richiamare'
-        ? 'Richiamare'
-        : previousType === 'appuntamento'
-          ? 'Appuntamento'
-          : 'Visita';
+    task.label = getTypeConfig(previousType).label;
     console.error('Errore aggiornamento tag:', err);
   }
 }
@@ -1446,14 +1439,16 @@ watch(filterMenuOpen, (open) => {
   filterCreatedToDisplay.value = filterCreatedToDisplay.value || formatDateDisplay(filterCreatedTo.value);
 });
 
-onMounted(async () => {
-  await loadCurrentUser();
-  await loadAziende();
-  if (availableAziende.value.length > 0 && !selectedAzienda.value) {
-    await handleSelectAzienda(availableAziende.value[0].value);
-  } else {
-    await loadTasks();
+watch(
+  () => selectedAzienda.value,
+  async (value) => {
+    if (value) await loadTasks();
   }
+);
+
+onMounted(async () => {
+  await loadTaskTypes();
+  await loadCurrentUser();
 });
 
 onMounted(() => {
@@ -1466,10 +1461,25 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.tasks-dashboard {
+.task-module-root {
   display: flex;
   flex-direction: column;
   height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.header-separator {
+  height: 1px;
+  background: #dadada;
+  margin: 0 24px;
+}
+
+.tasks-dashboard {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   background: var(--background-page);
 }
@@ -1480,57 +1490,24 @@ onBeforeUnmount(() => {
   gap: 12px;
   padding: 12px 16px 20px;
   height: 100%;
+  min-height: 0;
   box-sizing: border-box;
 }
 
-.module-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0;
-}
-
-.module-icon-wrapper {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(94, 114, 228, 0.1) 0%, rgba(168, 184, 216, 0.1) 100%);
-  border: 1px solid rgba(94, 114, 228, 0.15);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(94, 114, 228, 0.1);
-}
-
-.module-icon {
-  width: 24px;
-  height: 24px;
-  color: #5e72e4;
-}
-
-.module-title-content {
+.tasks-body {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  overflow: hidden;
 }
 
-.module-subtitle {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--foreground-subdued, #6b7280);
-  line-height: 1.4;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-}
-
-.module-title {
-  margin: 0;
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--foreground, #1f2937);
-  line-height: 1.2;
-  letter-spacing: -0.6px;
+.tasks-body-inner {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .tasks-topbar {
@@ -1538,36 +1515,6 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
-}
-
-.azienda-select-button {
-  width: 100%;
-  max-width: 260px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.azienda-select-button :deep(.v-button) {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 12px;
-  min-height: 36px;
-  width: 100%;
-  box-sizing: border-box;
-  border-radius: 10px;
-  border: 1px solid var(--border-color-subdued, #e5e7eb);
-}
-
-.azienda-button-text {
-  flex: 1;
-  text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-  font-size: 12px;
 }
 
 .view-toggle {
@@ -1688,11 +1635,17 @@ onBeforeUnmount(() => {
   color: #475569;
 }
 
+.task-chip--red {
+  background: rgba(239, 68, 68, 0.2);
+  color: #b91c1c;
+}
+
 .task-chip--yellow:not(.active),
 .task-chip--purple:not(.active),
 .task-chip--blue:not(.active),
 .task-chip--green:not(.active),
-.task-chip--gray:not(.active) {
+.task-chip--gray:not(.active),
+.task-chip--red:not(.active) {
   background: #f3f4f6;
   color: #9ca3af;
 }
@@ -1899,24 +1852,30 @@ onBeforeUnmount(() => {
   display: none;
 }
 
-.task-tag-select--richiamare {
+/* Colori pillole select in tabella (usa pillClass: yellow, purple, blue, gray, red) */
+.task-tag-select--yellow {
   background: rgba(245, 158, 11, 0.18);
   color: #b45309;
 }
 
-.task-tag-select--visita {
+.task-tag-select--purple {
   background: rgba(139, 92, 246, 0.18);
   color: #6d28d9;
 }
 
-.task-tag-select--appuntamento {
+.task-tag-select--blue {
   background: rgba(59, 130, 246, 0.18);
   color: #1d4ed8;
 }
 
-.task-tag-select--altro {
+.task-tag-select--gray {
   background: rgba(148, 163, 184, 0.2);
   color: #475569;
+}
+
+.task-tag-select--red {
+  background: rgba(239, 68, 68, 0.2);
+  color: #b91c1c;
 }
 
 .task-actions {
@@ -2001,6 +1960,10 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 8px;
   padding-bottom: 20px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
 }
 
 .tasks-table-header,
@@ -2060,6 +2023,21 @@ onBeforeUnmount(() => {
   color: #7c3aed;
 }
 
+.task-pill--blue {
+  background: rgba(59, 130, 246, 0.18);
+  color: #1d4ed8;
+}
+
+.task-pill--gray {
+  background: rgba(148, 163, 184, 0.2);
+  color: #475569;
+}
+
+.task-pill--red {
+  background: rgba(239, 68, 68, 0.2);
+  color: #b91c1c;
+}
+
 .task-text a {
   color: var(--primary, #5e72e4);
   text-decoration: none;
@@ -2076,6 +2054,10 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   padding-bottom: 20px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
 }
 
 .kanban-column {

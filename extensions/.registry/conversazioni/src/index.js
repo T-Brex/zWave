@@ -1,3 +1,4 @@
+import '../../common/disable-browser-translation.js';
 import ModuleComponent from './module.vue';
 import ConversationsTable from './pages/ConversationsTable.vue';
 import TasksView from './pages/TasksView.vue';

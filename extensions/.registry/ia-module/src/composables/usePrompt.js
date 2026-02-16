@@ -31,6 +31,7 @@ export function usePrompt(selectedAzienda = null) {
   });
 
   async function loadPrompt() {
+    const aziendaAtStart = selectedAzienda?.value ?? null;
     promptError.value = '';
     try {
       const params = {
@@ -38,34 +39,32 @@ export function usePrompt(selectedAzienda = null) {
         limit: 1,
       };
 
-      // Filtra per azienda se selezionata
-      if (selectedAzienda?.value) {
-        params.filter = {
-          azienda: {
-            _eq: selectedAzienda.value,
-          },
-        };
+      if (aziendaAtStart) {
+        params.filter = { azienda: { _eq: aziendaAtStart } };
       }
 
       const res = await api.get('/items/prompt', { params });
+      if (selectedAzienda?.value !== aziendaAtStart) return;
+
       const item = res?.data?.data?.[0];
       if (!item) {
-        // Se non esiste un prompt per l'azienda, crea un nuovo record vuoto
-        if (selectedAzienda?.value) {
+        if (aziendaAtStart) {
           try {
             const newPrompt = await api.post('/items/prompt', {
-              azienda: selectedAzienda.value,
+              azienda: aziendaAtStart,
               testo_prompt: '',
               primo_messaggio: '',
             });
+            if (selectedAzienda?.value !== aziendaAtStart) return;
             promptId.value = newPrompt?.data?.data?.id;
             promptValue.value = '';
             firstMessageValue.value = '';
-            if (!promptEditing.value) promptDraft.value = '';
-            if (!firstMessageEditing.value) firstMessageDraft.value = '';
+            promptDraft.value = '';
+            firstMessageDraft.value = '';
             return;
           } catch (createError) {
-            promptError.value = `Errore durante la creazione del prompt per l'azienda "${selectedAzienda.value}"`;
+            if (selectedAzienda?.value !== aziendaAtStart) return;
+            promptError.value = `Errore durante la creazione del prompt per l'azienda "${aziendaAtStart}"`;
             return;
           }
         } else {
@@ -73,12 +72,14 @@ export function usePrompt(selectedAzienda = null) {
           return;
         }
       }
+      if (selectedAzienda?.value !== aziendaAtStart) return;
       promptId.value = item.id;
       promptValue.value = item.testo_prompt || '';
       firstMessageValue.value = item.primo_messaggio || '';
-      if (!promptEditing.value) promptDraft.value = promptValue.value;
-      if (!firstMessageEditing.value) firstMessageDraft.value = firstMessageValue.value;
+      promptDraft.value = promptValue.value;
+      firstMessageDraft.value = firstMessageValue.value;
     } catch (e) {
+      if (selectedAzienda?.value !== aziendaAtStart) return;
       promptError.value = 'Errore caricamento prompt';
     }
   }

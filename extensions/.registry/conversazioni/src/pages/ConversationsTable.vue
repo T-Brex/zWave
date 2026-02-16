@@ -1,17 +1,5 @@
 <template>
-  <private-view>
-    <template #title>
-      <div class="module-header">
-        <div class="module-icon-wrapper">
-          <v-icon name="chat" class="module-icon" />
-        </div>
-        <div class="module-title-content">
-          <span class="module-subtitle">Contenuti</span>
-          <h1 class="module-title">Conversazioni</h1>
-        </div>
-      </div>
-    </template>
-
+  <private-view title="Tabella">
     <template #navigation>
       <v-list nav>
         <v-list-item
@@ -53,17 +41,16 @@
       </v-list>
     </template>
 
-    <AziendeDrawer
-      v-model="drawerOpen"
-      :available-aziende="availableAziende"
-      :selected-azienda="selectedAzienda"
-      :loading="loadingAziende"
-      :error="aziendeError"
-      @select="handleSelectAzienda"
-      @refresh="loadAziende"
-    />
+    <template #actions>
+      <CompanySelector
+        v-model="selectedClientId"
+        @selected="onAziendaSelected"
+      />
+    </template>
 
-    <div class="table-dashboard">
+    <div class="tabella-module-root">
+      <div class="header-separator" />
+      <div class="table-dashboard">
       <v-info
         v-if="conversationsError"
         type="danger"
@@ -81,18 +68,6 @@
         <div class="table-layout">
           <div class="table-main">
             <div class="table-topbar">
-              <v-button
-                class="azienda-select-button"
-                :secondary="!!selectedAzienda"
-                :type="selectedAzienda ? 'secondary' : 'primary'"
-                @click="drawerOpen = true"
-              >
-                <v-icon name="business" left />
-                <span class="azienda-button-text">
-                  {{ selectedAzienda || 'Seleziona azienda' }}
-                </span>
-                <v-icon name="arrow_drop_down" right />
-              </v-button>
               <v-button
                 class="export-button"
                 :disabled="tableConversations.length === 0 || exportingTable"
@@ -287,6 +262,7 @@
               </div>
             </div>
 
+            <div class="table-body">
             <div v-if="loadingConversations" class="loading">
               <v-progress-circular indeterminate small />
               <span>Caricamento...</span>
@@ -379,6 +355,7 @@
                 </tbody>
               </table>
             </div>
+            </div>
             <div v-if="tableConversations.length > 0" class="table-pagination">
               <div class="density-toggle">
                 <button
@@ -443,10 +420,10 @@
             :active-conversation="activeConversation"
             :selected-azienda="selectedAzienda"
             :field-names="fieldNames"
-            @open-drawer="drawerOpen = true"
           />
         </div>
       </div>
+    </div>
     </div>
   </private-view>
 </template>
@@ -455,9 +432,8 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useApi } from '@directus/extensions-sdk';
-import AziendeDrawer from '../components/AziendeDrawer.vue';
+import CompanySelector from '../../../common/components/CompanySelector.vue';
 import ContactDetails from '../components/ContactDetails.vue';
-import { useAziende } from '../composables/useAziende';
 import { useConversations } from '../composables/useConversations';
 import { getField as getFieldUtil, formatDate, formatDuration, formatTime, normalizeYesNo, normalizeInterest } from '../utils/conversationUtils';
 
@@ -468,17 +444,13 @@ const isTableRoute = computed(() => route.path.endsWith('/tabella'));
 const isTaskRoute = computed(() => route.path.endsWith('/task'));
 const isListRoute = computed(() => !isTableRoute.value && !isTaskRoute.value);
 
-const {
-  availableAziende,
-  selectedAzienda,
-  loadingAziende,
-  error: aziendeError,
-  loadAziende,
-  selectAzienda: selectAziendaUtil
-} = useAziende();
-
-const drawerOpen = ref(false);
+const selectedClientId = ref(null);
+const selectedAzienda = ref(null);
 const aziendaField = ref(null);
+
+function onAziendaSelected(payload) {
+  selectedAzienda.value = payload?.azienda ?? null;
+}
 const api = useApi();
 const currentUserIsAdmin = ref(false);
 
@@ -963,12 +935,6 @@ function resetFilters() {
   page.value = 1;
 }
 
-async function handleSelectAzienda(azienda) {
-  selectAziendaUtil(azienda);
-  drawerOpen.value = false;
-  await loadConversations();
-}
-
 function selectConversation(conversation) {
   activeConversationId.value = conversation.id;
   activeConversation.value = conversation;
@@ -995,7 +961,7 @@ watch([conversations, activeConversationId], () => {
 }, { immediate: true });
 
 function retry() {
-  loadAziende();
+  loadConversations();
 }
 
 function sortIndicator(key) {
@@ -1221,75 +1187,40 @@ async function loadCurrentUser() {
   }
 }
 
+watch(
+  () => selectedAzienda.value,
+  async (value) => {
+    if (value) await loadConversations();
+  }
+);
+
 onMounted(async () => {
   await loadCurrentUser();
-  await loadAziende();
-  if (availableAziende.value.length > 0 && !selectedAzienda.value) {
-    await handleSelectAzienda(availableAziende.value[0].value);
-  } else if (selectedAzienda.value) {
-    await loadConversations();
-  }
 });
 </script>
 
 <style scoped>
-.table-dashboard {
+.tabella-module-root {
   display: flex;
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background: var(--background-page);
+  overflow: hidden;
 }
 
-.module-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0;
+.header-separator {
+  height: 1px;
+  background: #dadada;
+  margin: 0 24px;
 }
 
-.module-icon-wrapper {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(94, 114, 228, 0.1) 0%, rgba(168, 184, 216, 0.1) 100%);
-  border: 1px solid rgba(94, 114, 228, 0.15);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(94, 114, 228, 0.1);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.module-icon {
-  width: 24px;
-  height: 24px;
-  color: #5e72e4;
-}
-
-.module-title-content {
+.table-dashboard {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-
-.module-subtitle {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--foreground-subdued, #6b7280);
-  line-height: 1.4;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-}
-
-.module-title {
-  margin: 0;
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--foreground, #1f2937);
-  line-height: 1.2;
-  letter-spacing: -0.6px;
+  width: 100%;
+  background: var(--background-page);
 }
 
 .table-content {
@@ -1313,6 +1244,15 @@ onMounted(async () => {
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+  min-height: 0;
+}
+
+.table-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .table-topbar {
@@ -1324,43 +1264,6 @@ onMounted(async () => {
 
 .export-button {
   white-space: nowrap;
-}
-
-.azienda-select-button {
-  width: 100%;
-  max-width: 260px;
-  font-size: 12px;
-  font-weight: 600;
-  overflow: visible;
-}
-
-.azienda-select-button :deep(.v-button) {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 12px;
-  min-height: 36px;
-  width: 100%;
-  box-sizing: border-box;
-  border-radius: 10px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  overflow: visible;
-  line-height: 1.4;
-  border: 1px solid var(--border-color-subdued, #e5e7eb);
-}
-
-.azienda-button-text {
-  flex: 1;
-  text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-  letter-spacing: -0.01em;
-  font-size: 12px;
-  line-height: 1.4;
 }
 
 .table-searchbar {
@@ -1737,7 +1640,8 @@ onMounted(async () => {
 }
 
 .table-wrapper {
-  flex: 0 0 auto;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   border: 1px solid var(--border-color-subdued, #e5e7eb);
   border-radius: 12px;

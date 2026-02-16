@@ -26,7 +26,16 @@
           @click="currentView = 'deviazione-chiamate'"
         >
           <v-list-item-icon><v-icon name="call_split" /></v-list-item-icon>
-          <v-list-item-content>Deviazione Chiamate</v-list-item-content>
+          <v-list-item-content>Attivazione Numero</v-list-item-content>
+        </v-list-item>
+
+        <v-list-item
+          class="nav-item"
+          :class="{ 'nav-item--active': currentView === 'trasferimento-chiamate' }"
+          @click="currentView = 'trasferimento-chiamate'"
+        >
+          <v-list-item-icon><v-icon name="phone_forwarded" /></v-list-item-icon>
+          <v-list-item-content>Trasferimento Operatore</v-list-item-content>
         </v-list-item>
 
         <v-list-item
@@ -41,9 +50,15 @@
     </template>
 
     <template #actions>
-      <CompanySelector @selected="handleAziendaSelected" />
+      <CompanySelector
+        v-model="selectedClientId"
+        @selected="onAziendaSelected"
+      />
     </template>
 
+    <div class="ia-module-root">
+      <div class="header-separator" />
+      <div class="ia-module-view">
     <!-- Base di Conoscenza View -->
     <div v-if="currentView === 'base-conoscenza'">
       <KnowledgeBaseView />
@@ -54,9 +69,14 @@
       <PromptEditor />
     </div>
 
-    <!-- Deviazione Chiamate View -->
+    <!-- Attivazione Numero View -->
     <div v-if="currentView === 'deviazione-chiamate'">
-      <DeviazioneChiamateView />
+      <DeviazioneChiamateView @navigate="currentView = $event" />
+    </div>
+
+    <!-- Trasferimento Operatore View -->
+    <div v-if="currentView === 'trasferimento-chiamate'">
+      <TrasferimentoChiamateView />
     </div>
 
     <!-- Calendario View -->
@@ -144,18 +164,21 @@
       @close="closeIframeModal"
       @save="triggerIframeSave"
     />
+      </div>
+    </div>
   </private-view>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useApi, useStores } from '@directus/extensions-sdk';
 import { useAzienda, provideAzienda } from './composables/useAzienda';
 import KnowledgeBaseView from './components/KnowledgeBaseView.vue';
 import PromptEditor from './components/PromptEditor.vue';
 import DeviazioneChiamateView from './components/DeviazioneChiamateView.vue';
+import TrasferimentoChiamateView from './components/TrasferimentoChiamateView.vue';
 import IframeModal from './components/IframeModal.vue';
-import CompanySelector from './components/CompanySelector.vue';
+import CompanySelector from '../../common/components/CompanySelector.vue';
 import { assetCalendario1, assetCalendario2 } from './calendario-assets.js';
 
 const api = useApi();
@@ -180,7 +203,52 @@ const storageKey = computed(() => {
 const { selectedAzienda, setAzienda } = useAzienda({ storageKey });
 provideAzienda({ selectedAzienda, setAzienda });
 
+const selectedClientId = ref(null);
+
+function onAziendaSelected(payload) {
+  setAzienda(payload?.azienda ?? null);
+}
+
 const currentView = ref('base-conoscenza');
+
+// Cliente: tipo_cliente per mostrare Attivazione Numero solo se inbound
+const clientData = ref({ id: null, tipo_cliente: null });
+
+const isInboundClient = computed(
+  () => String(clientData.value?.tipo_cliente || '').toLowerCase() === 'inbound'
+);
+
+async function loadClientData() {
+  clientData.value = { id: null, tipo_cliente: null };
+  try {
+    const aziendaValue = selectedAzienda?.value;
+    if (!aziendaValue) return;
+    const res = await api.get('/items/clienti', {
+      params: {
+        fields: ['id', 'tipo_cliente'],
+        limit: 1,
+        filter: { azienda: { _eq: aziendaValue } },
+      },
+    });
+    const item = res?.data?.data?.[0];
+    if (item) {
+      clientData.value = {
+        id: item.id,
+        tipo_cliente: item.tipo_cliente ?? null,
+      };
+    }
+  } catch (e) {
+    clientData.value = { id: null, tipo_cliente: null };
+  }
+}
+
+watch(
+  () => selectedAzienda?.value,
+  () => {
+    loadClientData();
+  },
+  { immediate: true }
+);
 
 const CALENDARIO_URL = 'https://cal-calcom.oyxsxy.easypanel.host/availability';
 
@@ -215,11 +283,6 @@ async function triggerIframeSave() {
   }, 800);
 }
 
-function handleAziendaSelected(azienda) {
-  // Aggiorna l'azienda selezionata
-  setAzienda(azienda);
-}
-
 // Expose iframe modal functions globally for legacy code compatibility
 if (typeof window !== 'undefined') {
   window.__iaModuleIframeModal = {
@@ -235,6 +298,23 @@ if (typeof window !== 'undefined') {
 </script>
 
 <style scoped>
+.ia-module-root {
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.header-separator {
+  height: 1px;
+  background: #dadada;
+  margin: 0 24px;
+}
+
+.ia-module-view {
+  padding: 24px 32px;
+  min-height: 400px;
+}
+
 .nav-item {
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);

@@ -1,3 +1,4 @@
+import '../../common/disable-browser-translation.js';
 import ModuleComponent from './module.vue';
 
 export default {

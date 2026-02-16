@@ -302,8 +302,9 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   flex-grow: 0;
   transition: max-height 0.25s ease, opacity 0.25s ease, transform 0.25s ease, margin 0.25s ease, padding 0.25s ease;
-  max-height: 260px;
-  overflow: hidden;
+  /* Altezza sufficiente per label + summary-content (280px) + padding, così testo e scrollbar non vengono tagliati */
+  max-height: 360px;
+  overflow: visible;
 }
 
 .summary-section--collapsed {
@@ -334,6 +335,8 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   border: 1px solid var(--border-color-subdued, #e5e7eb);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  max-height: 280px;
+  overflow-y: auto;
 }
 
 .message-label {

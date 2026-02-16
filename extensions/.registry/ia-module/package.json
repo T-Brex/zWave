@@ -5,14 +5,11 @@
   "type": "module",
   "scripts": {
     "build": "directus-extension build",
+    "dev": "directus-extension build --watch",
     "prebuild": "node scripts/embed-calendario-assets.cjs",
     "embed-assets": "node scripts/embed-calendario-assets.cjs"
   },
-  "keywords": [
-    "directus",
-    "directus-extension",
-    "directus-module"
-  ],
+  "keywords": ["directus", "directus-extension", "directus-module"],
   "directus:extension": {
     "type": "module",
     "path": "dist/index.js",

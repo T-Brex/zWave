@@ -26,10 +26,16 @@
             <v-icon name="settings" />
           </v-list-item-icon>
           <v-list-item-content>
-            Impostazioni Chiamata
+            Impostazioni Outbound
           </v-list-item-content>
         </v-list-item>
       </v-list>
+    </template>
+    <template #actions>
+      <CompanySelector
+        v-model="selectedClientId"
+        @selected="onAziendaSelected"
+      />
     </template>
 
     <!-- Drawer per selezione aziende (destra) - come Deviazione Chiamate -->
@@ -113,6 +119,8 @@
     </v-drawer>
 
     <!-- Main Content -->
+    <div class="outbound-module-root">
+      <div class="header-separator" />
     <div class="outbound-container">
       <!-- Sezione Elenco lead -->
       <template v-if="activeSection === 'leads'">
@@ -122,19 +130,6 @@
           <h1 class="page-title">Chiamate Outbound</h1>
           <p class="page-subtitle">Visualizza e gestisci i leads</p>
         </div>
-        <v-button
-          v-tooltip="selectedAzienda ? 'Cambia azienda' : 'Seleziona azienda'"
-          :secondary="!!selectedAzienda"
-          :type="selectedAzienda ? 'secondary' : 'primary'"
-          @click="drawerOpen = true"
-          class="azienda-select-button"
-        >
-          <v-icon name="business" left />
-          <span class="azienda-button-text">
-            {{ selectedAzienda || 'Seleziona azienda' }}
-          </span>
-          <v-icon name="arrow_drop_down" right />
-        </v-button>
         <v-button
           v-tooltip="selectedAzienda ? 'Importa leads da foglio Google' : 'Seleziona un\'azienda per importare i leads da foglio Google'"
           :secondary="true"
@@ -160,7 +155,7 @@
           v-tooltip="chiamateAutomatiche ? 'Disattiva chiamate automatiche' : 'Attiva chiamate automatiche'"
           secondary
           class="header-action-button"
-          :disabled="!selectedAzienda || !selectedClienteId || chiamateAutomaticheLoading"
+          :disabled="!selectedAzienda || chiamateAutomaticheLoading"
           :loading="chiamateAutomaticheLoading"
           @click="toggleChiamateAutomatiche"
         >
@@ -382,25 +377,14 @@
       </div>
       </template>
 
-      <!-- Sezione Impostazioni Chiamata -->
+      <!-- Sezione Impostazioni Outbound -->
       <div v-else-if="activeSection === 'assegna-numero'" class="impostazioni-chiamata-section">
         <div class="impostazioni-chiamata-header">
-          <h2 class="impostazioni-chiamata-title">Impostazioni Chiamata</h2>
-          <v-button
-            v-tooltip="selectedAzienda ? 'Cambia azienda' : 'Seleziona azienda'"
-            :secondary="!!selectedAzienda"
-            :type="selectedAzienda ? 'secondary' : 'primary'"
-            class="impostazioni-azienda-btn"
-            @click="drawerOpen = true"
-          >
-            <v-icon name="business" left />
-            <span class="impostazioni-azienda-text">{{ selectedAzienda || 'Seleziona azienda' }}</span>
-            <v-icon name="arrow_drop_down" right />
-          </v-button>
+          <h2 class="impostazioni-chiamata-title">Impostazioni Outbound</h2>
         </div>
         <div v-if="!selectedAzienda" class="impostazioni-placeholder">
           <v-icon name="business" class="impostazioni-placeholder-icon" />
-          <p class="impostazioni-placeholder-text">Seleziona un'azienda dalla barra in alto per configurare le impostazioni di chiamata.</p>
+          <p class="impostazioni-placeholder-text">Seleziona un'azienda dalla barra in alto per configurare le impostazioni outbound.</p>
         </div>
         <template v-else>
           <!-- Card 1: Numero di telefono (stile Deviazione Chiamate) -->
@@ -483,7 +467,7 @@
               </v-button>
             </div>
             <p class="impostazioni-card-desc">
-              Scegli il numero da cui far partire le chiamate tra quelli già verificati. Il numero selezionato viene salvato nelle impostazioni di chiamata.
+              Scegli il numero da cui far partire le chiamate tra quelli già verificati. Il numero selezionato viene salvato nelle impostazioni outbound.
             </p>
             <div v-if="numeriVerificatiLoading" class="impostazioni-loading impostazioni-loading--small">
               <v-progress-circular indeterminate />
@@ -588,47 +572,112 @@
               <!-- Strategia di Riprova -->
               <div class="impostazioni-field impostazioni-field--block">
                 <label class="impostazioni-label">Strategia di Riprova (Retry Logic)</label>
-                <div class="impostazioni-retry-grid">
-                  <div class="impostazioni-retry-item">
-                    <span class="impostazioni-retry-label">Se &quot;Occupato&quot;</span>
-                    <span class="impostazioni-retry-desc">Richiama dopo</span>
-                    <div class="impostazioni-retry-input-wrap">
-                      <input
-                        v-model.number="riprovaOccupatoMinuti"
-                        type="number"
-                        min="1"
-                        max="120"
-                        class="impostazioni-input impostazioni-input--small"
-                      />
-                      <span>minuti</span>
+                <div class="retry-cards">
+                  <!-- Occupato -->
+                  <div class="retry-card retry-card--occupato">
+                    <div class="retry-card-header">
+                      <div class="retry-card-icon">
+                        <v-icon name="phone_locked" />
+                      </div>
+                      <div class="retry-card-title">Occupato</div>
+                    </div>
+                    <div class="retry-card-body">
+                      <span class="retry-card-label">Richiama dopo</span>
+                      <div class="retry-time-inputs">
+                        <div class="retry-time-group">
+                          <input
+                            v-model.number="riprovaOccupatoOre"
+                            type="number"
+                            min="0"
+                            max="72"
+                            class="retry-time-input"
+                          />
+                          <span class="retry-time-unit">ore</span>
+                        </div>
+                        <span class="retry-time-separator">:</span>
+                        <div class="retry-time-group">
+                          <input
+                            v-model.number="riprovaOccupatoMinuti"
+                            type="number"
+                            min="0"
+                            max="59"
+                            class="retry-time-input"
+                          />
+                          <span class="retry-time-unit">min</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div class="impostazioni-retry-item">
-                    <span class="impostazioni-retry-label">Se &quot;Non Risponde&quot;</span>
-                    <span class="impostazioni-retry-desc">Richiama dopo</span>
-                    <div class="impostazioni-retry-input-wrap">
-                      <input
-                        v-model.number="riprovaNonRispondeOre"
-                        type="number"
-                        min="1"
-                        max="72"
-                        class="impostazioni-input impostazioni-input--small"
-                      />
-                      <span>ore</span>
+
+                  <!-- Non Risponde -->
+                  <div class="retry-card retry-card--non-risponde">
+                    <div class="retry-card-header">
+                      <div class="retry-card-icon">
+                        <v-icon name="phone_missed" />
+                      </div>
+                      <div class="retry-card-title">Non Risponde</div>
+                    </div>
+                    <div class="retry-card-body">
+                      <span class="retry-card-label">Richiama dopo</span>
+                      <div class="retry-time-inputs">
+                        <div class="retry-time-group">
+                          <input
+                            v-model.number="riprovaNonRispondeOre"
+                            type="number"
+                            min="0"
+                            max="72"
+                            class="retry-time-input"
+                          />
+                          <span class="retry-time-unit">ore</span>
+                        </div>
+                        <span class="retry-time-separator">:</span>
+                        <div class="retry-time-group">
+                          <input
+                            v-model.number="riprovaNonRispondeMinuti"
+                            type="number"
+                            min="0"
+                            max="59"
+                            class="retry-time-input"
+                          />
+                          <span class="retry-time-unit">min</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div class="impostazioni-retry-item">
-                    <span class="impostazioni-retry-label">Se &quot;Segreteria&quot;</span>
-                    <span class="impostazioni-retry-desc">Richiama dopo</span>
-                    <div class="impostazioni-retry-input-wrap">
-                      <input
-                        v-model.number="riprovaSegreteriaMinuti"
-                        type="number"
-                        min="1"
-                        max="1440"
-                        class="impostazioni-input impostazioni-input--small"
-                      />
-                      <span>minuti</span>
+
+                  <!-- Segreteria -->
+                  <div class="retry-card retry-card--segreteria">
+                    <div class="retry-card-header">
+                      <div class="retry-card-icon">
+                        <v-icon name="voicemail" />
+                      </div>
+                      <div class="retry-card-title">Segreteria</div>
+                    </div>
+                    <div class="retry-card-body">
+                      <span class="retry-card-label">Richiama dopo</span>
+                      <div class="retry-time-inputs">
+                        <div class="retry-time-group">
+                          <input
+                            v-model.number="riprovaSegreteriaOre"
+                            type="number"
+                            min="0"
+                            max="72"
+                            class="retry-time-input"
+                          />
+                          <span class="retry-time-unit">ore</span>
+                        </div>
+                        <span class="retry-time-separator">:</span>
+                        <div class="retry-time-group">
+                          <input
+                            v-model.number="riprovaSegreteriaMinuti"
+                            type="number"
+                            min="0"
+                            max="59"
+                            class="retry-time-input"
+                          />
+                          <span class="retry-time-unit">min</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -690,6 +739,7 @@
         </div>
       </transition>
     </div>
+    </div>
   </private-view>
 </template>
 
@@ -707,6 +757,7 @@ import {
   GIORNI_OPTIONS,
 } from './constants.js';
 import { useOutboundShared } from './composables/useOutboundShared.js';
+import CompanySelector from '../../common/components/CompanySelector.vue';
 
 const api = useApi();
 const { useUserStore } = useStores();
@@ -724,6 +775,7 @@ const {
   selectedGoogleFoglioUrl,
   selectedClienteId,
   selectedClienteIdUser,
+  selectedChiamateOutboundId,
   chiamateAutomatiche,
   chiamateAutomaticheLoading,
   chiamateAutomaticheError,
@@ -733,6 +785,17 @@ const {
   openGoogleFoglio,
   toggleChiamateAutomatiche,
 } = shared;
+
+const selectedClientId = ref(null);
+
+function onAziendaSelected(payload) {
+  const azienda = payload?.azienda ?? null;
+  if (azienda) {
+    selectAziendaShared(azienda);
+    loadGoogleFoglioUrl();
+    loadLeads();
+  }
+}
 
 function selectAzienda(aziendaName) {
   selectAziendaShared(aziendaName);
@@ -755,7 +818,7 @@ const numeroAssegnaSuccess = ref(false);
 const numeroAssegnaError = ref(null);
 const numeroAssegnaCodice = ref(null); // codice restituito dal webhook
 
-// Impostazioni Chiamata: collection chiamate_outbound (orari, tentativi, riprova, giorni)
+// Impostazioni Outbound: collection chiamate_outbound (orari, tentativi, riprova, giorni)
 const outboundRecordId = ref(null);
 const outboundLoading = ref(false);
 const outboundSaving = ref(false);
@@ -770,9 +833,13 @@ function getDefaultOrariPerGiorno() {
   }));
 }
 const orariPerGiorno = ref(getDefaultOrariPerGiorno());
+// Riprova: ore e minuti separati per ogni caso
+const riprovaOccupatoOre = ref(0);
 const riprovaOccupatoMinuti = ref(15);
 const riprovaNonRispondeOre = ref(4);
-const riprovaSegreteriaMinuti = ref(60); // minuti dopo cui richiamare se "Segreteria"
+const riprovaNonRispondeMinuti = ref(0);
+const riprovaSegreteriaOre = ref(1);
+const riprovaSegreteriaMinuti = ref(0);
 const outboundSaveSuccess = ref(false);
 const selectedAgentPhoneNumberId = ref(null); // agent_phone_number_id in chiamate_outbound
 // Richiamate automatiche (campo richiamate_automatiche nella collection chiamate_outbound)
@@ -993,7 +1060,7 @@ async function loadLeads() {
   }
 }
 
-// --- Impostazioni Chiamata: numero + webhook (GET), salvataggio in numeri_associati ---
+// --- Impostazioni Outbound: numero + webhook (GET), salvataggio in numeri_associati ---
 let numeriAssociatiCleanupTimer = null;
 
 function parseNumeriAssociati(raw) {
@@ -1058,11 +1125,24 @@ async function sendNumeroWebhook() {
     numeriAssociatiCleanupTimer = null;
   }
   try {
+    // Recupera riga completa chiamate_outbound filtrata per id_user
+    let chiamateOutbound = null;
+    const filter = { azienda: { _eq: selectedAzienda.value } };
+    if (userId != null) filter.id_user = { _eq: userId };
+    const outResPre = await api.get(`/items/${CHIAMATE_OUTBOUND_COLLECTION}`, {
+      params: { filter, limit: 1 },
+    });
+    const outRowsPre = outResPre?.data?.data ?? [];
+    if (outRowsPre.length > 0) chiamateOutbound = outRowsPre[0];
+
     const params = new URLSearchParams({
       numero: num,
       azienda: selectedAzienda.value,
     });
-    const url = `${WEBHOOK_NUMERO}?${params.toString()}`;
+    if (chiamateOutbound != null) {
+      params.set('chiamate_outbound', JSON.stringify(chiamateOutbound));
+    }
+    const url = `${WEBHOOK_NUMERO}${WEBHOOK_NUMERO.includes('?') ? '&' : '?'}${params.toString()}`;
     const res = await fetch(url, { method: 'GET' });
     if (!res.ok) throw new Error(`Webhook risposto ${res.status}`);
     const contentType = res.headers.get('content-type') || '';
@@ -1087,13 +1167,7 @@ async function sendNumeroWebhook() {
       added_at: new Date().toISOString(),
     };
 
-    const filter = { azienda: { _eq: selectedAzienda.value } };
-    if (userId != null) filter.id_user = { _eq: userId };
-    const outRes = await api.get(`/items/${CHIAMATE_OUTBOUND_COLLECTION}`, {
-      params: { filter, limit: 1, fields: ['id', 'numeri_associati'] },
-    });
-    const rows = outRes?.data?.data ?? [];
-    const outRow = rows[0];
+    const outRow = chiamateOutbound;
     let list = [];
     if (outRow) {
       outboundRecordId.value = outRow.id;
@@ -1120,9 +1194,9 @@ async function sendNumeroWebhook() {
         tentativi_richiamate: tentativiRichiamate.value ?? 3,
         orari_richiamate: orariPayload,
         riprova_chiamate: {
-          occupato_minuti: riprovaOccupatoMinuti.value ?? 15,
-          non_risponde_ore: riprovaNonRispondeOre.value ?? 4,
-          segreteria_minuti: riprovaSegreteriaMinuti.value ?? 60,
+          occupato_minuti: ((riprovaOccupatoOre.value ?? 0) * 60) + (riprovaOccupatoMinuti.value ?? 15),
+          non_risponde_minuti: ((riprovaNonRispondeOre.value ?? 4) * 60) + (riprovaNonRispondeMinuti.value ?? 0),
+          segreteria_minuti: ((riprovaSegreteriaOre.value ?? 1) * 60) + (riprovaSegreteriaMinuti.value ?? 0),
         },
         giorni_richiamate: giorniConSlots.length ? giorniConSlots : [1, 2, 3, 4, 5],
         richiamate_automatiche: richiamateAutomaticheOutbound.value === true,
@@ -1151,7 +1225,7 @@ async function sendNumeroWebhook() {
   }
 }
 
-// --- Impostazioni Chiamata: orari per giorno ---
+// --- Impostazioni Outbound: orari per giorno ---
 function addOrarioSlot(dayIndex) {
   const dayGroup = orariPerGiorno.value[dayIndex];
   if (!dayGroup || !Array.isArray(dayGroup.slots)) return;
@@ -1229,7 +1303,7 @@ async function toggleRichiamateAutomaticheOutbound() {
   }
 }
 
-// --- Impostazioni Chiamata: load/save chiamate_outbound ---
+// --- Impostazioni Outbound: load/save chiamate_outbound ---
 async function loadOutboundSettings() {
   if (!selectedAzienda.value) return;
   const userId = selectedClienteIdUser.value;
@@ -1258,15 +1332,31 @@ async function loadOutboundSettings() {
         }
       }
       if (riprova && typeof riprova === 'object') {
-        riprovaOccupatoMinuti.value = riprova.occupato_minuti ?? 15;
-        riprovaNonRispondeOre.value = riprova.non_risponde_ore ?? 4;
-        riprovaSegreteriaMinuti.value = Math.max(1, Math.min(1440, riprova.segreteria_minuti ?? 60));
+        // Occupato: converti minuti totali in ore + minuti
+        const occupatoTotale = riprova.occupato_minuti ?? 15;
+        riprovaOccupatoOre.value = Math.floor(occupatoTotale / 60);
+        riprovaOccupatoMinuti.value = occupatoTotale % 60;
+        // Non risponde: supporta sia il vecchio campo non_risponde_ore che il nuovo non_risponde_minuti
+        const nonRispondeTotale = riprova.non_risponde_minuti ?? ((riprova.non_risponde_ore ?? 4) * 60);
+        riprovaNonRispondeOre.value = Math.floor(nonRispondeTotale / 60);
+        riprovaNonRispondeMinuti.value = nonRispondeTotale % 60;
+        // Segreteria: converti minuti totali in ore + minuti
+        const segreteriaTotale = riprova.segreteria_minuti ?? 60;
+        riprovaSegreteriaOre.value = Math.floor(segreteriaTotale / 60);
+        riprovaSegreteriaMinuti.value = segreteriaTotale % 60;
       }
     } else {
       outboundRecordId.value = null;
       selectedAgentPhoneNumberId.value = null;
       richiamateAutomaticheOutbound.value = false;
       orariPerGiorno.value = getDefaultOrariPerGiorno();
+      // Reset valori retry ai default
+      riprovaOccupatoOre.value = 0;
+      riprovaOccupatoMinuti.value = 15;
+      riprovaNonRispondeOre.value = 4;
+      riprovaNonRispondeMinuti.value = 0;
+      riprovaSegreteriaOre.value = 1;
+      riprovaSegreteriaMinuti.value = 0;
     }
   } catch (err) {
     console.error('loadOutboundSettings:', err);
@@ -1288,6 +1378,9 @@ async function saveOutboundSettings() {
     const giorniConSlots = orariPerGiorno.value
       .filter((dg) => Array.isArray(dg.slots) && dg.slots.length > 0)
       .map((dg) => dg.day);
+    const occupatoTotaleMinuti = Math.max(1, ((riprovaOccupatoOre.value ?? 0) * 60) + (riprovaOccupatoMinuti.value ?? 15));
+    const nonRispondeTotaleMinuti = Math.max(1, ((riprovaNonRispondeOre.value ?? 4) * 60) + (riprovaNonRispondeMinuti.value ?? 0));
+    const segreteriaTotaleMinuti = Math.max(1, ((riprovaSegreteriaOre.value ?? 1) * 60) + (riprovaSegreteriaMinuti.value ?? 0));
     const payload = {
       azienda: selectedAzienda.value,
       id_user: userId ?? null,
@@ -1295,9 +1388,9 @@ async function saveOutboundSettings() {
       tentativi_richiamate: Math.max(1, Math.min(20, tentativiRichiamate.value)) || 3,
       orari_richiamate: orariPayload,
       riprova_chiamate: {
-        occupato_minuti: Math.max(1, Math.min(120, riprovaOccupatoMinuti.value)) || 15,
-        non_risponde_ore: Math.max(1, Math.min(72, riprovaNonRispondeOre.value)) || 4,
-        segreteria_minuti: Math.max(1, Math.min(1440, riprovaSegreteriaMinuti.value)) || 60,
+        occupato_minuti: Math.min(4320, occupatoTotaleMinuti),
+        non_risponde_minuti: Math.min(4320, nonRispondeTotaleMinuti),
+        segreteria_minuti: Math.min(4320, segreteriaTotaleMinuti),
       },
       giorni_richiamate: giorniConSlots.length ? giorniConSlots : [1, 2, 3, 4, 5],
       richiamate_automatiche: richiamateAutomaticheOutbound.value === true,
@@ -1369,9 +1462,9 @@ async function selectNumeroVerificato(item) {
         tentativi_richiamate: tentativiRichiamate.value ?? 3,
         orari_richiamate: orariPayload,
         riprova_chiamate: {
-          occupato_minuti: riprovaOccupatoMinuti.value ?? 15,
-          non_risponde_ore: riprovaNonRispondeOre.value ?? 4,
-          segreteria_minuti: riprovaSegreteriaMinuti.value ?? 60,
+          occupato_minuti: ((riprovaOccupatoOre.value ?? 0) * 60) + (riprovaOccupatoMinuti.value ?? 15),
+          non_risponde_minuti: ((riprovaNonRispondeOre.value ?? 4) * 60) + (riprovaNonRispondeMinuti.value ?? 0),
+          segreteria_minuti: ((riprovaSegreteriaOre.value ?? 1) * 60) + (riprovaSegreteriaMinuti.value ?? 0),
         },
         giorni_richiamate: giorniConSlots.length ? giorniConSlots : [1, 2, 3, 4, 5],
         richiamate_automatiche: richiamateAutomaticheOutbound.value === true,
@@ -1403,7 +1496,7 @@ function formatNumeroDisplay(num) {
   return num;
 }
 
-// Carica impostazioni e numeri verificati quando si entra nella sezione Impostazioni Chiamata con azienda selezionata
+// Carica impostazioni e numeri verificati quando si entra nella sezione Impostazioni Outbound con azienda selezionata
 watch(
   () => activeSection.value === 'assegna-numero' && selectedAzienda.value,
   async (shouldLoad) => {
@@ -1442,17 +1535,27 @@ async function importLeadsToWebhook() {
       return;
     }
 
-    // Disattiva chiamate automatiche prima di inviare il webhook
-    const clienteId = record.id ?? selectedClienteId.value;
-    if (clienteId && chiamateAutomatiche.value) {
-      await api.patch(`/items/${CLIENTI_COLLECTION}/${clienteId}`, { chiamate_automatiche: false });
+    // Disattiva chiamate automatiche (chiamate_outbound) prima di inviare il webhook
+    const outboundId = selectedChiamateOutboundId.value;
+    if (outboundId && chiamateAutomatiche.value) {
+      await api.patch(`/items/${CHIAMATE_OUTBOUND_COLLECTION}/${outboundId}`, { chiamate_automatiche: false });
       chiamateAutomatiche.value = false;
     }
+
+    // Recupera riga completa chiamate_outbound filtrata per id_user
+    let chiamateOutbound = null;
+    const outboundFilter = { azienda: { _eq: selectedAzienda.value } };
+    if (record.id_user != null) outboundFilter.id_user = { _eq: record.id_user };
+    const outboundRes = await api.get(`/items/${CHIAMATE_OUTBOUND_COLLECTION}`, {
+      params: { filter: outboundFilter, limit: 1 },
+    });
+    const outboundRows = outboundRes?.data?.data ?? [];
+    if (outboundRows.length > 0) chiamateOutbound = outboundRows[0];
 
     const webhookResponse = await fetch(WEBHOOK_IMPORT_LEADS, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(record),
+      body: JSON.stringify({ record, chiamate_outbound: chiamateOutbound }),
     });
 
     if (!webhookResponse.ok) {
@@ -1611,13 +1714,25 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.outbound-module-root {
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.header-separator {
+  height: 1px;
+  background: #dadada;
+  margin: 0 24px;
+}
+
 .outbound-container {
   padding: 40px;
   max-width: 1400px;
   margin: 0 auto;
 }
 
-/* Sezione Impostazioni Chiamata */
+/* Sezione Impostazioni Outbound */
 .impostazioni-chiamata-section {
   max-width: 720px;
   margin: 0 auto;
@@ -1630,9 +1745,7 @@ onUnmounted(() => {
 .impostazioni-chiamata-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  flex-wrap: wrap;
+  justify-content: center;
   margin-bottom: 8px;
 }
 
@@ -1642,35 +1755,7 @@ onUnmounted(() => {
   font-weight: 700;
   color: var(--foreground, #0f172a);
   letter-spacing: -0.03em;
-}
-
-.impostazioni-azienda-btn {
-  flex-shrink: 0;
-}
-
-.impostazioni-azienda-btn :deep(.v-button) {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 14px;
-  min-height: 38px;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 12px;
-  border: 1px solid var(--border-color-subdued, #e5e7eb);
-  transition: all 0.2s ease;
-}
-
-.impostazioni-azienda-btn :deep(.v-button .v-icon) {
-  width: 18px !important;
-  height: 18px !important;
-}
-
-.impostazioni-azienda-text {
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-align: center;
 }
 
 .impostazioni-placeholder {
@@ -2115,8 +2200,27 @@ onUnmounted(() => {
 }
 
 .impostazioni-input--small {
-  max-width: 72px;
-  padding: 8px 10px;
+  max-width: 56px;
+  min-width: 56px;
+  padding: 10px 8px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 15px;
+  /* Nasconde le freccette/spinner degli input number */
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.impostazioni-input--small::-webkit-outer-spin-button,
+.impostazioni-input--small::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.impostazioni-input--small:focus {
+  outline: none;
+  border-color: var(--primary, #6366f1);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
 }
 
 /* Orari richiamate per giorno – stile tabella compatta, stessa palette */
@@ -2236,51 +2340,200 @@ onUnmounted(() => {
   height: 14px !important;
 }
 
-.impostazioni-retry-grid {
+/* Retry Cards - Design compatto e professionale */
+.retry-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
   margin-top: 12px;
 }
 
-.impostazioni-retry-item {
-  padding: 14px 16px;
-  background: var(--background-subdued, #f8fafc);
+@media (max-width: 900px) {
+  .retry-cards {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+.retry-card {
+  background: var(--background-page, #fff);
   border: 1px solid var(--border-normal, #e2e8f0);
   border-radius: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  overflow: hidden;
+  transition: all 0.2s ease;
 }
 
-.impostazioni-retry-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--foreground, #0f172a);
+.retry-card:hover {
+  border-color: var(--border-normal, #cbd5e1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
-.impostazioni-retry-desc {
-  font-size: 12px;
-  color: var(--foreground-subdued, #64748b);
-}
-
-.impostazioni-retry-input-wrap {
+.retry-card-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 4px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-normal, #e2e8f0);
 }
 
-.impostazioni-retry-input-wrap span {
-  font-size: 13px;
-  color: var(--foreground-subdued, #64748b);
+.retry-card--occupato .retry-card-header {
+  background: linear-gradient(135deg, #fef3c7 0%, #fef9c3 100%);
+  border-bottom-color: #fcd34d;
 }
 
-.impostazioni-retry-value {
+.retry-card--non-risponde .retry-card-header {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  border-bottom-color: #fca5a5;
+}
+
+.retry-card--segreteria .retry-card-header {
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+  border-bottom-color: #a5b4fc;
+}
+
+.retry-card-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  max-width: 26px;
+  max-height: 26px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  overflow: hidden;
+  line-height: 1;
+}
+
+.retry-card--occupato .retry-card-icon {
+  background: #fbbf24;
+  color: #78350f;
+}
+
+.retry-card--non-risponde .retry-card-icon {
+  background: #f87171;
+  color: #7f1d1d;
+}
+
+.retry-card--segreteria .retry-card-icon {
+  background: #818cf8;
+  color: #312e81;
+}
+
+.retry-card-icon :deep(.v-icon) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 14px !important;
+  height: 14px !important;
+  min-width: 14px !important;
+  min-height: 14px !important;
+  max-width: 14px !important;
+  max-height: 14px !important;
+  line-height: 1 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.retry-card-icon :deep(.v-icon svg) {
+  display: block !important;
+  width: 14px !important;
+  height: 14px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.retry-card-title {
   font-size: 13px;
   font-weight: 600;
   color: var(--foreground, #0f172a);
-  margin-top: 4px;
+  letter-spacing: -0.01em;
+}
+
+.retry-card-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.retry-card-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--foreground-subdued, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.retry-time-inputs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.retry-time-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.retry-time-input {
+  width: 48px;
+  height: 34px;
+  padding: 0;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: 'SF Mono', Monaco, 'Roboto Mono', ui-monospace, monospace;
+  color: var(--foreground, #0f172a);
+  background: var(--background-subdued, #f8fafc);
+  border: 1px solid var(--border-normal, #e2e8f0);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  /* Nasconde spinner */
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.retry-time-input::-webkit-outer-spin-button,
+.retry-time-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.retry-time-input:hover {
+  border-color: var(--border-normal, #cbd5e1);
+  background: var(--background-page, #fff);
+}
+
+.retry-time-input:focus {
+  outline: none;
+  border-color: var(--primary, #6366f1);
+  background: var(--background-page, #fff);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+}
+
+.retry-time-unit {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--foreground-subdued, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.retry-time-separator {
+  font-size: 16px;
+  font-weight: 300;
+  color: var(--foreground-subdued, #94a3b8);
+  margin: 0 1px;
+  padding-bottom: 14px;
 }
 
 .impostazioni-giorni {

@@ -3,13 +3,68 @@
     <div class="prompt-layout">
       <div class="prompt-main">
         <h3 class="prompt-title">Prompt</h3>
-        <textarea
-          v-model="promptDisplay"
-          class="prompt-textarea"
-          :readonly="!promptEditing"
-          placeholder="Scrivi qui il prompt del chatbot..."
-          @focus="startPromptEdit"
-        />
+
+        <div v-if="isOutboundClient" class="variables-insert-card">
+          <div class="variables-insert-header">
+            <div class="variables-insert-header-icon">
+              <v-icon name="merge_type" />
+            </div>
+            <div class="variables-insert-header-text">
+              <span class="variables-insert-title">Variabili disponibili</span>
+              <span class="variables-insert-hint">Clicca per inserire nel prompt o nel primo messaggio</span>
+            </div>
+          </div>
+          <div class="variables-insert-list">
+            <button
+              v-for="v in DYNAMIC_VARIABLES"
+              :key="v.key"
+              type="button"
+              class="variable-insert-btn"
+              :title="`Inserisci ${v.key} nel testo`"
+              @click="insertVariable(v.key)"
+            >
+              <span class="variable-insert-label">{{ v.label }}</span>
+              <v-icon name="add" class="variable-insert-icon" />
+            </button>
+          </div>
+        </div>
+
+        <div class="prompt-textarea-wrapper prompt-textarea-wrapper--main">
+          <div
+            v-show="!promptEditing"
+            class="prompt-textarea prompt-textarea-display"
+            :class="{ 'prompt-textarea-display--empty': !(promptValue && promptValue.trim()) }"
+            @click="focusPromptAndEdit"
+          >
+            <template v-if="promptValue && promptValue.trim()">
+              <template v-for="(seg, i) in promptDisplaySegments" :key="i">
+                <span v-if="seg.type === 'text'" class="prompt-textarea-text">{{ seg.value }}</span>
+                <span v-else class="variable-inline">{{ seg.value }}</span>
+              </template>
+            </template>
+            <span v-else class="prompt-textarea-placeholder">Scrivi qui il prompt del chatbot...</span>
+          </div>
+          <textarea
+            v-show="promptEditing"
+            ref="promptTextareaRef"
+            v-model="promptDisplay"
+            class="prompt-textarea"
+            placeholder="Scrivi qui il prompt del chatbot..."
+            @focus="activeVariableTarget = 'prompt'; startPromptEdit()"
+          />
+          <div v-if="promptEditing && isOutboundClient" class="prompt-edit-preview">
+            <span class="prompt-edit-preview-label">Anteprima</span>
+            <div class="prompt-edit-preview-content">
+              <template v-if="promptDraft">
+                <template v-for="(seg, i) in promptEditPreviewSegments" :key="i">
+                  <span v-if="seg.type === 'text'" class="prompt-textarea-text">{{ seg.value }}</span>
+                  <span v-else class="variable-inline">{{ seg.value }}</span>
+                </template>
+              </template>
+              <span v-else class="prompt-textarea-placeholder">...</span>
+            </div>
+          </div>
+        </div>
 
         <div class="prompt-toolbar">
           <button
@@ -44,14 +99,43 @@
         </div>
 
         <h3 class="prompt-title prompt-title--first-message">Primo Messaggio</h3>
-        <textarea
-          v-model="firstMessageDisplay"
-          class="prompt-textarea prompt-textarea--small"
-          :readonly="!firstMessageEditing"
-          rows="2"
-          placeholder="Scrivi il primo messaggio..."
-          @focus="startFirstMessageEdit"
-        />
+        <div class="prompt-textarea-wrapper">
+          <div
+            v-show="!firstMessageEditing"
+            class="prompt-textarea prompt-textarea--small prompt-textarea-display"
+            :class="{ 'prompt-textarea-display--empty': !(firstMessageValue && firstMessageValue.trim()) }"
+            @click="focusFirstMessageAndEdit"
+          >
+            <template v-if="firstMessageValue && firstMessageValue.trim()">
+              <template v-for="(seg, i) in firstMessageDisplaySegments" :key="i">
+                <span v-if="seg.type === 'text'" class="prompt-textarea-text">{{ seg.value }}</span>
+                <span v-else class="variable-inline">{{ seg.value }}</span>
+              </template>
+            </template>
+            <span v-else class="prompt-textarea-placeholder">Scrivi il primo messaggio...</span>
+          </div>
+          <textarea
+            v-show="firstMessageEditing"
+            ref="firstMessageTextareaRef"
+            v-model="firstMessageDisplay"
+            class="prompt-textarea prompt-textarea--small"
+            rows="2"
+            placeholder="Scrivi il primo messaggio..."
+            @focus="activeVariableTarget = 'firstMessage'; startFirstMessageEdit()"
+          />
+          <div v-if="firstMessageEditing && isOutboundClient" class="prompt-edit-preview prompt-edit-preview--small">
+            <span class="prompt-edit-preview-label">Anteprima</span>
+            <div class="prompt-edit-preview-content">
+              <template v-if="firstMessageDraft">
+                <template v-for="(seg, i) in firstMessageEditPreviewSegments" :key="i">
+                  <span v-if="seg.type === 'text'" class="prompt-textarea-text">{{ seg.value }}</span>
+                  <span v-else class="variable-inline">{{ seg.value }}</span>
+                </template>
+              </template>
+              <span v-else class="prompt-textarea-placeholder">...</span>
+            </div>
+          </div>
+        </div>
 
         <div class="prompt-actions">
           <button
@@ -507,8 +591,14 @@ import { usePrompt } from '../composables/usePrompt';
 import { usePromptHistory } from '../composables/usePromptHistory';
 import { injectAzienda } from '../composables/useAzienda';
 import { useApi } from '@directus/extensions-sdk';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
+
+/** Variabili dinamiche disponibili solo per clienti tipo "outbound" */
+const DYNAMIC_VARIABLES = [
+  { key: '{{Nome}}', label: 'Nome' },
+  { key: '{{Cognome}}', label: 'Cognome' },
+];
 
 const emit = defineEmits(['unsaved-change']);
 const aziendaContext = injectAzienda();
@@ -600,6 +690,13 @@ let firstMessageSavedTimer;
 let voiceSavedTimer;
 let languagesSavedTimer;
 
+// Cliente: tipo_cliente per abilitare variabili dinamiche (solo outbound)
+const clientData = ref({ id: null, tipo_cliente: null });
+const clientDataLoading = ref(false);
+const promptTextareaRef = ref(null);
+const firstMessageTextareaRef = ref(null);
+const activeVariableTarget = ref(null);
+
 const baseDetectConfig = {
   type: 'system',
   name: 'language_detection',
@@ -623,6 +720,57 @@ const defaultDetectConfig = {
 const selectedVoice = computed(() =>
   voices.value.find((voice) => voice.id === selectedVoiceId.value)
 );
+
+const isOutboundClient = computed(
+  () => String(clientData.value?.tipo_cliente || '').toLowerCase() === 'outbound'
+);
+
+/** Segmenti per visualizzare variabili senza graffe (solo grafica) */
+function parseVariableSegments(text) {
+  if (text == null || text === '') return [];
+  const regex = /\{\{(Nome|Cognome)\}\}/g;
+  const segments = [];
+  let lastIndex = 0;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ type: 'text', value: text.slice(lastIndex, match.index) });
+    }
+    segments.push({ type: 'variable', value: match[1] });
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    segments.push({ type: 'text', value: text.slice(lastIndex) });
+  }
+  return segments;
+}
+
+const promptDisplaySegments = computed(() =>
+  isOutboundClient.value ? parseVariableSegments(promptValue.value) : [{ type: 'text', value: promptValue.value || '' }]
+);
+
+const firstMessageDisplaySegments = computed(() =>
+  isOutboundClient.value ? parseVariableSegments(firstMessageValue.value) : [{ type: 'text', value: firstMessageValue.value || '' }]
+);
+
+/** Anteprima in tempo reale durante la scrittura (draft) */
+const promptEditPreviewSegments = computed(() =>
+  isOutboundClient.value ? parseVariableSegments(promptDraft.value) : [{ type: 'text', value: promptDraft.value || '' }]
+);
+
+const firstMessageEditPreviewSegments = computed(() =>
+  isOutboundClient.value ? parseVariableSegments(firstMessageDraft.value) : [{ type: 'text', value: firstMessageDraft.value || '' }]
+);
+
+function focusPromptAndEdit() {
+  startPromptEdit();
+  nextTick(() => promptTextareaRef.value?.focus());
+}
+
+function focusFirstMessageAndEdit() {
+  startFirstMessageEdit();
+  nextTick(() => firstMessageTextareaRef.value?.focus());
+}
 
 const defaultVoiceId = computed(() => getDefaultVoiceId(voices.value));
 const descriptionHtml = computed(() => {
@@ -709,6 +857,45 @@ function formatTime(value) {
   const minutes = Math.floor(value / 60);
   const seconds = Math.floor(value % 60);
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function insertVariable(variableKey) {
+  const target = activeVariableTarget.value || 'prompt';
+  if (target === 'prompt') {
+    if (!promptEditing.value) startPromptEdit();
+    const textarea = promptTextareaRef.value;
+    const text = promptDraft.value ?? '';
+    const start = textarea?.selectionStart ?? text.length;
+    const end = textarea?.selectionEnd ?? start;
+    const before = text.slice(0, start);
+    const after = text.slice(end);
+    promptDraft.value = before + variableKey + after;
+    nextTick(() => {
+      const el = promptTextareaRef.value;
+      if (el) {
+        const newPos = start + variableKey.length;
+        el.focus();
+        el.setSelectionRange(newPos, newPos);
+      }
+    });
+  } else {
+    if (!firstMessageEditing.value) startFirstMessageEdit();
+    const textarea = firstMessageTextareaRef.value;
+    const text = firstMessageDraft.value ?? '';
+    const start = textarea?.selectionStart ?? text.length;
+    const end = textarea?.selectionEnd ?? start;
+    const before = text.slice(0, start);
+    const after = text.slice(end);
+    firstMessageDraft.value = before + variableKey + after;
+    nextTick(() => {
+      const el = firstMessageTextareaRef.value;
+      if (el) {
+        const newPos = start + variableKey.length;
+        el.focus();
+        el.setSelectionRange(newPos, newPos);
+      }
+    });
+  }
 }
 
 function setSaved(flagRef, timerRef) {
@@ -1046,6 +1233,35 @@ async function handleSaveFirstMessage() {
   }
 }
 
+async function loadClientData() {
+  const aziendaAtStart = selectedAzienda?.value ?? null;
+  clientDataLoading.value = true;
+  clientData.value = { id: null, tipo_cliente: null };
+  try {
+    if (!aziendaAtStart) return;
+    const res = await api.get('/items/clienti', {
+      params: {
+        fields: ['id', 'tipo_cliente'],
+        limit: 1,
+        filter: { azienda: { _eq: aziendaAtStart } },
+      },
+    });
+    if (selectedAzienda?.value !== aziendaAtStart) return;
+    const item = res?.data?.data?.[0];
+    if (item) {
+      clientData.value = {
+        id: item.id,
+        tipo_cliente: item.tipo_cliente ?? null,
+      };
+    }
+  } catch (e) {
+    if (selectedAzienda?.value !== aziendaAtStart) return;
+    clientData.value = { id: null, tipo_cliente: null };
+  } finally {
+    clientDataLoading.value = false;
+  }
+}
+
 async function resolveClienteId() {
   try {
     const aziendaValue = selectedAzienda?.value;
@@ -1094,9 +1310,7 @@ async function resolveClienteVoiceId() {
     const fallbackUser = await api.get('/items/clienti', {
       params: {
         ...baseParams,
-        filter: userCandidates.length
-          ? { id_user: { _in: userCandidates } }
-          : { id_user: { _eq: '$CURRENT_USER' } },
+        filter: { id_user: { _eq: '$CURRENT_USER' } },
       },
     });
     const fallbackUserVoice = fallbackUser?.data?.data?.[0]?.id_voce_agente || null;
@@ -1352,6 +1566,7 @@ onMounted(() => {
   loadVoices();
   loadLingue();
   hydrateLingueCliente();
+  loadClientData();
 });
 
 function handleBeforeUnload(event) {
@@ -1380,6 +1595,9 @@ onBeforeRouteLeave((_to, _from, next) => {
 watch(
   () => selectedAzienda?.value,
   () => {
+    // Reset stato modifica: evita di mostrare draft vuoto o dati vecchi
+    promptEditing.value = false;
+    firstMessageEditing.value = false;
     promptValue.value = '';
     firstMessageValue.value = '';
     promptDraft.value = '';
@@ -1391,15 +1609,19 @@ watch(
     extraLanguageCodes.value = [];
     savedDefaultLanguageCode.value = '';
     savedExtraLanguageCodes.value = [];
-  detectLanguage.value = false;
-  detectConfig.value = null;
-  savedDetectLanguage.value = false;
-  savedDetectConfig.value = null;
+    detectLanguage.value = false;
+    detectConfig.value = null;
+    savedDetectLanguage.value = false;
+    savedDetectConfig.value = null;
+    clientData.value = { id: null, tipo_cliente: null };
+    activeVariableTarget.value = null;
+    historySelected.value = null;
+    historyItems.value = [];
     loadPrompt();
     loadVoices();
     loadLingue();
     hydrateLingueCliente();
-    historySelected.value = null;
+    loadClientData();
     if (historyPanelOpen.value) {
       loadHistory();
     }
@@ -1479,6 +1701,186 @@ watch(selectedVoiceAudioUrl, () => {
 
 .prompt-title + .prompt-textarea {
   margin-bottom: 0;
+}
+
+/* Sezione inserimento variabili (solo cliente outbound) */
+.variables-insert-card {
+  margin-bottom: 18px;
+  padding: 18px 20px;
+  background: var(--background-page, #fff);
+  border: 1px solid var(--border-normal, #e2e8f0);
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.variables-insert-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.variables-insert-header-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(94, 114, 228, 0.12) 0%, rgba(94, 114, 228, 0.06) 100%);
+  border-radius: 12px;
+  color: var(--primary, #5e72e4);
+}
+
+.variables-insert-header-icon :deep(.v-icon) {
+  width: 20px;
+  height: 20px;
+}
+
+.variables-insert-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.variables-insert-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--foreground, #0f172a);
+  letter-spacing: -0.02em;
+}
+
+.variables-insert-hint {
+  font-size: 12px;
+  color: var(--foreground-subdued, #64748b);
+  line-height: 1.4;
+}
+
+.variables-insert-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.variable-insert-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-normal, #e2e8f0);
+  background: var(--background-subdued, #f8fafc);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--foreground, #0f172a);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.variable-insert-btn:hover {
+  border-color: var(--primary, #5e72e4);
+  background: rgba(94, 114, 228, 0.08);
+  color: var(--primary, #5e72e4);
+  box-shadow: 0 2px 8px rgba(94, 114, 228, 0.12);
+}
+
+.variable-insert-btn:active {
+  transform: scale(0.98);
+}
+
+.variable-insert-label {
+  letter-spacing: -0.01em;
+}
+
+.variable-insert-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: var(--foreground-subdued, #94a3b8);
+  transform: translateY(-2px);
+}
+
+.variable-insert-btn:hover .variable-insert-icon {
+  color: var(--primary, #5e72e4);
+}
+
+.prompt-textarea-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.prompt-edit-preview {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: var(--background-subdued, #f8fafc);
+  border: 1px solid var(--border-normal, #e2e8f0);
+  border-radius: 10px;
+}
+
+.prompt-edit-preview--small {
+  padding: 10px 14px;
+}
+
+.prompt-edit-preview-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--foreground-subdued, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.prompt-edit-preview-content {
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--foreground, #0f172a);
+}
+
+.prompt-textarea-display {
+  cursor: text;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  line-height: 1.6;
+}
+
+/* Solo il prompt principale: altezza fissa come la textarea per evitare salti al cambio azienda / al clic */
+.prompt-textarea-wrapper--main .prompt-textarea-display {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.prompt-textarea-display--empty .prompt-textarea-placeholder {
+  color: var(--foreground-subdued, #94a3b8);
+}
+
+.prompt-textarea-placeholder {
+  pointer-events: none;
+}
+
+.prompt-textarea-text {
+  /* testo normale, nessuno stile extra */
+}
+
+/* Variabili nel testo: mostrate senza graffe, stile “illuminato” */
+.variable-inline {
+  display: inline;
+  padding: 2px 8px;
+  margin: 0 1px;
+  border-radius: 6px;
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--primary, #5e72e4);
+  background: rgba(94, 114, 228, 0.1);
+  border: 1px solid rgba(94, 114, 228, 0.25);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 .prompt-textarea {

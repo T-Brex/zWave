@@ -2,7 +2,7 @@
 	<private-view title="Approfondimenti">
 		<template #navigation>
 			<v-list nav>
-				<v-list-item class="nav-item nav-item--active" :active="true">
+				<v-list-item class="nav-item nav-item--active" :active="true" :to="modulePath">
 					<v-list-item-icon class="nav-icon-approfondimenti">
 						<v-icon name="insights" />
 					</v-list-item-icon>
@@ -10,93 +10,16 @@
 				</v-list-item>
 			</v-list>
 		</template>
-
-		<!-- Drawer selezione azienda (destra) -->
-		<v-drawer v-model="drawerOpen" side="right" :title="drawerTitle" width="320">
-			<div class="drawer-content">
-				<div class="drawer-header">
-					<div class="drawer-header-title">
-						<v-icon name="business" />
-						<span>Seleziona Azienda</span>
-					</div>
-					<v-button
-						v-tooltip="'Aggiorna lista aziende'"
-						icon
-						secondary
-						:loading="aziendeLoading"
-						@click="loadAziende"
-					>
-						<v-icon name="refresh" />
-					</v-button>
-				</div>
-				<div v-if="aziendeLoading" class="drawer-loading">
-					<v-progress-circular indeterminate />
-					<span>Caricamento aziende...</span>
-				</div>
-				<v-info
-					v-else-if="aziendeError"
-					type="danger"
-					icon="error"
-					:title="aziendeError.title || 'Errore'"
-					:text="aziendeError.message || ''"
-				>
-					<template #append>
-						<v-button @click="loadAziende" :loading="aziendeLoading">Riprova</v-button>
-					</template>
-				</v-info>
-				<v-info
-					v-else-if="aziendeList.length === 0"
-					icon="info"
-					title="Nessuna azienda"
-					text="Non sono state trovate aziende nella collection clienti."
-				/>
-				<v-list v-else nav class="aziende-list">
-					<v-list-item
-						v-for="client in aziendeList"
-						:key="client.id"
-						class="azienda-item"
-						:class="{ 'azienda-item--active': selectedClientId === client.id }"
-						@click="selectAzienda(client)"
-					>
-						<v-list-item-icon>
-							<v-icon :name="selectedClientId === client.id ? 'check_circle' : 'business'" />
-						</v-list-item-icon>
-						<v-list-item-content>
-							<v-list-item-title>{{ client.azienda || 'Senza nome' }}</v-list-item-title>
-						</v-list-item-content>
-						<v-list-item-icon v-if="selectedClientId === client.id">
-							<v-icon name="check" />
-						</v-list-item-icon>
-					</v-list-item>
-				</v-list>
-				<div v-if="selectedAziendaLabel" class="selected-azienda-info">
-					<div class="selected-azienda-label">Azienda attualmente selezionata:</div>
-					<div class="selected-azienda-name">
-						<v-icon name="check_circle" />
-						<span>{{ selectedAziendaLabel }}</span>
-					</div>
-				</div>
-			</div>
-		</v-drawer>
-
-		<div class="approfondimenti-view">
-			<div class="page-header">
-				<div class="page-header-left">
-					<h1 class="approfondimenti-view__title">Dashboard</h1>
-				</div>
-				<v-button
-					v-tooltip="selectedAziendaLabel ? 'Cambia azienda' : 'Seleziona azienda'"
-					:secondary="!!selectedAziendaLabel"
-					:type="selectedAziendaLabel ? 'secondary' : 'primary'"
-					class="azienda-select-button"
-					@click="drawerOpen = true"
-				>
-					<v-icon name="business" left />
-					<span class="azienda-button-text">{{ selectedAziendaLabel || 'Seleziona azienda' }}</span>
-					<v-icon name="arrow_drop_down" right />
-				</v-button>
-			</div>
-
+		<template #actions>
+			<CompanySelector
+				v-model="selectedClientId"
+				@selected="onAziendaSelected"
+				@loaded="onCompanySelectorLoaded"
+			/>
+		</template>
+		<div class="approfondimenti-module-root">
+			<div class="header-separator" />
+			<div class="approfondimenti-view">
 			<div v-if="!selectedClientId" class="chart-empty chart-empty--prompt">
 				<v-icon name="business" class="chart-empty-icon" />
 				<span>Seleziona un'azienda per vedere il diagramma dei minuti.</span>
@@ -454,23 +377,24 @@
 				</div>
 			</div>
 		</div>
+		</div>
 	</private-view>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed } from 'vue';
+import { useRoute } from 'vue-router';
 import { useApi } from '@directus/extensions-sdk';
+import CompanySelector from '../../common/components/CompanySelector.vue';
 
+const route = useRoute();
+const modulePath = computed(() => route.path);
 const api = useApi();
 const COLLECTION_NAME = 'clienti';
 const COLLECTION_CHIAMATE = 'Chiamate';
-const STORAGE_KEY = 'insights_selected_client_id';
 
-const drawerOpen = ref(false);
-const aziendeList = ref([]);
-const aziendeLoading = ref(false);
-const aziendeError = ref(null);
 const selectedClientId = ref(null);
+const selectedAziendaLabel = ref('');
 
 const chartData = ref({ minuti_totali: 0, minuti_rimanenti: 0, minuti_usati: 0 });
 const chartLoading = ref(true);
@@ -613,57 +537,27 @@ const chartHoveredIndex = ref(null);
 const tooltipX = ref(0);
 const tooltipY = ref(0);
 
-const drawerTitle = computed(() => 'Azienda');
-const selectedAziendaLabel = computed(() => {
-	if (!selectedClientId.value) return null;
-	const c = aziendeList.value.find((x) => x.id === selectedClientId.value);
-	return c?.azienda ?? null;
-});
-
 function toNum(v) {
 	const n = Number(v);
 	return Number.isFinite(n) ? Math.max(0, n) : 0;
 }
 
-async function loadAziende() {
-	aziendeLoading.value = true;
-	aziendeError.value = null;
-	try {
-		const response = await api.get(`/items/${COLLECTION_NAME}`, {
-			params: { fields: ['id', 'azienda'], limit: -1 },
-		});
-		const items = response.data?.data ?? response.data ?? [];
-		const list = Array.isArray(items) ? items : [];
-		const withName = list
-			.filter((item) => item?.id != null)
-			.map((item) => ({ id: item.id, azienda: item?.azienda != null ? String(item.azienda).trim() : '' }));
-		aziendeList.value = withName.sort((a, b) => (a.azienda || '').localeCompare(b.azienda || ''));
-		if (aziendeList.value.length > 0 && !selectedClientId.value) {
-			const saved = localStorage.getItem(STORAGE_KEY);
-			const id = saved != null && saved !== '' ? (Number(saved) || saved) : null;
-			if (id != null && aziendeList.value.some((c) => c.id === id)) selectedClientId.value = id;
-			else selectedClientId.value = aziendeList.value[0].id;
-		}
-	} catch (e) {
-		const msg = e?.response?.data?.errors?.[0]?.message || e?.message || 'Errore caricamento aziende.';
-		aziendeError.value = { title: 'Errore', message: msg };
-		aziendeList.value = [];
-	} finally {
-		aziendeLoading.value = false;
+function onAziendaSelected(payload) {
+	if (!payload) return;
+	selectedAziendaLabel.value = payload.azienda || '';
+	loadChartData(payload.id);
+	loadChiamateData(payload.azienda || '');
+}
+
+function onCompanySelectorLoaded() {
+	if (selectedClientId.value == null) {
+		chartLoading.value = false;
 	}
 }
 
-function selectAzienda(client) {
-	if (!client || client.id == null) return;
-	selectedClientId.value = client.id;
-	localStorage.setItem(STORAGE_KEY, String(client.id));
-	drawerOpen.value = false;
-	loadChartData();
-	loadChiamateData();
-}
-
-async function loadChartData() {
-	if (selectedClientId.value == null) {
+async function loadChartData(clientId) {
+	const id = clientId ?? selectedClientId.value;
+	if (id == null) {
 		chartData.value = { minuti_totali: 0, minuti_rimanenti: 0, minuti_usati: 0 };
 		chartLoading.value = false;
 		return;
@@ -674,7 +568,7 @@ async function loadChartData() {
 		const response = await api.get(`/items/${COLLECTION_NAME}`, {
 			params: {
 				fields: ['minuti_totali', 'minuti_rimanenti', 'minuti_usati'],
-				filter: { id: { _eq: selectedClientId.value } },
+				filter: { id: { _eq: id } },
 				limit: 1,
 			},
 		});
@@ -700,9 +594,11 @@ async function loadChartData() {
 	}
 }
 
-async function loadChiamateData() {
-	if (!selectedAziendaLabel.value) {
+async function loadChiamateData(azienda) {
+	const label = azienda ?? selectedAziendaLabel.value;
+	if (!label) {
 		chiamateList.value = [];
+		chiamateLoading.value = false;
 		return;
 	}
 	chiamateLoading.value = true;
@@ -711,7 +607,7 @@ async function loadChiamateData() {
 		const response = await api.get(`/items/${COLLECTION_CHIAMATE}`, {
 			params: {
 				fields: ['date_created', 'durata_minuti', 'prenotazione_effettuata'],
-				filter: { azienda: { _eq: selectedAziendaLabel.value } },
+				filter: { azienda: { _eq: label } },
 				limit: -1,
 				sort: 'date_created',
 			},
@@ -735,7 +631,11 @@ async function loadChiamateData() {
 
 const chartTotal = computed(() => {
 	const d = chartData.value;
-	return d.minuti_totali + d.minuti_rimanenti + d.minuti_usati;
+	const totali = toNum(d.minuti_totali);
+	const rimanenti = toNum(d.minuti_rimanenti);
+	const usati = toNum(d.minuti_usati);
+	// Mostra il grafico se c'è almeno un valore > 0 (incluso rimanenti === totali con usati = 0)
+	return totali > 0 || rimanenti > 0 || usati > 0 ? Math.max(totali, rimanenti + usati) : 0;
 });
 
 function formatMinuti(n) {
@@ -779,9 +679,11 @@ const pieSlices = computed(() => {
 	let start = 0;
 	return items.map((item, i) => {
 		const ratio = item.value / pieTotal;
-		const angle = 360 * ratio;
+		let angle = 360 * ratio;
 		const isLast = i === items.length - 1;
-		const end = isLast ? 360 : start + angle;
+		// Evita arc 0→360 che in SVG può non renderizzare; usa 359.99 per cerchio intero
+		if (isLast && angle >= 359.99) angle = 359.99;
+		const end = isLast ? start + angle : start + angle;
 		const path = describeArc(cx, cy, r, start, end);
 		const midAngle = (start + end) / 2;
 		const pos = polarToCartesian(cx, cy, labelRadius, midAngle);
@@ -1135,34 +1037,20 @@ function onChartMouseLeave() {
 	chartHoveredIndex.value = null;
 }
 
-onMounted(async () => {
-	await loadAziende();
-	if (selectedClientId.value != null) {
-		loadChartData();
-		loadChiamateData();
-	} else {
-		chartLoading.value = false;
-	}
-});
+
 </script>
 
 <style scoped>
-.page-header {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	justify-content: space-between;
-	gap: 20px;
+.approfondimenti-module-root {
 	width: 100%;
-	max-width: 960px;
-	margin: 0 auto 24px;
-	padding: 0 0 16px;
-	box-sizing: border-box;
+	min-width: 0;
+	overflow-x: hidden;
 }
 
-.page-header-left {
-	flex: 1;
-	min-width: 0;
+.header-separator {
+	height: 1px;
+	background: #dadada;
+	margin: 0 24px;
 }
 
 .nav-icon-approfondimenti {
@@ -1180,142 +1068,6 @@ onMounted(async () => {
 	margin: 0 auto;
 	padding: 24px 32px 48px;
 	box-sizing: border-box;
-}
-
-.approfondimenti-view__title {
-	margin: 0 0 4px;
-	font-size: 50px;
-	font-weight: 600;
-	color: var(--foreground, #1a1a1a);
-	letter-spacing: -0.02em;
-}
-
-.approfondimenti-view__intro {
-	margin: 0;
-	font-size: 14px;
-	line-height: 1.5;
-	color: var(--foreground-subdued, #5f6368);
-}
-
-.azienda-select-button {
-	font-size: 13px;
-	font-weight: 600;
-	flex-shrink: 0;
-}
-
-.azienda-select-button :deep(.v-button) {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	padding: 12px 18px;
-	min-height: 44px;
-	border-radius: 10px;
-	border: 1px solid var(--border-color-subdued, #e5e7eb);
-	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.azienda-select-button :deep(.v-button .v-icon) {
-	flex-shrink: 0;
-	width: 20px !important;
-	height: 20px !important;
-}
-
-.azienda-button-text {
-	text-align: left;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	min-width: 0;
-	font-size: 13px;
-}
-
-.drawer-content {
-	display: flex;
-	flex-direction: column;
-	gap: 16px;
-	padding: 8px;
-}
-
-.drawer-header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-	padding: 16px 20px;
-	background: var(--background-subdued, #f8f9fa);
-	border-radius: 12px;
-	border: 1px solid var(--border-normal, #e8e8e8);
-}
-
-.drawer-header-title {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	font-size: 15px;
-	font-weight: 600;
-	color: var(--foreground, #1a1a1a);
-}
-
-.drawer-loading {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	gap: 12px;
-	padding: 32px 20px;
-	color: var(--foreground-subdued, #5f6368);
-}
-
-.aziende-list {
-	flex: 1;
-	overflow-y: auto;
-}
-
-.azienda-item {
-	cursor: pointer;
-	transition: all 0.2s ease;
-	border-radius: 8px;
-	margin-bottom: 4px;
-}
-
-.azienda-item:hover {
-	background: var(--background-subdued, #f9fafb);
-}
-
-.azienda-item--active {
-	background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%);
-	border-radius: 8px;
-	border: 1px solid var(--border-normal, #e8e8e8);
-}
-
-.azienda-item--active :deep(.v-list-item-content) {
-	font-weight: 600;
-}
-
-.azienda-item--active :deep(.v-icon) {
-	opacity: 0.9;
-}
-
-.selected-azienda-info {
-	margin-top: auto;
-	padding: 16px;
-	background: var(--background-subdued, #f8f9fa);
-	border-radius: 12px;
-	border: 1px solid var(--border-normal, #e8e8e8);
-}
-
-.selected-azienda-label {
-	font-size: 12px;
-	color: var(--foreground-subdued, #5f6368);
-	margin-bottom: 6px;
-}
-
-.selected-azienda-name {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	font-weight: 600;
-	color: var(--foreground, #1a1a1a);
 }
 
 .chart-empty--prompt {

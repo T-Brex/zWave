@@ -1,11 +1,12 @@
 /**
- * Stato e azioni condivisi tra Elenco lead e Impostazioni Chiamata.
+ * Stato e azioni condivisi tra Elenco lead e Impostazioni Outbound.
  * Utilizzato dal modulo principale e fornito ai componenti figli.
  */
 import { ref, computed } from 'vue';
 import {
   LEADS_COLLECTION,
   CLIENTI_COLLECTION,
+  CHIAMATE_OUTBOUND_COLLECTION,
 } from '../constants.js';
 
 export function useOutboundShared(api) {
@@ -17,6 +18,7 @@ export function useOutboundShared(api) {
   const selectedGoogleFoglioUrl = ref(null);
   const selectedClienteId = ref(null);
   const selectedClienteIdUser = ref(null);
+  const selectedChiamateOutboundId = ref(null); // id del record chiamate_outbound (per toggle chiamate_automatiche)
   const chiamateAutomatiche = ref(false);
   const chiamateAutomaticheLoading = ref(false);
   const chiamateAutomaticheError = ref(null);
@@ -69,30 +71,46 @@ export function useOutboundShared(api) {
     selectedGoogleFoglioUrl.value = null;
     selectedClienteId.value = null;
     selectedClienteIdUser.value = null;
+    selectedChiamateOutboundId.value = null;
     chiamateAutomatiche.value = false;
     if (!selectedAzienda.value) return;
     try {
-      const response = await api.get(`/items/${CLIENTI_COLLECTION}`, {
+      const clientiResponse = await api.get(`/items/${CLIENTI_COLLECTION}`, {
         params: {
-          fields: ['id', 'id_user', 'id_google_fogli', 'chiamate_automatiche'],
+          fields: ['id', 'id_user'],
           filter: { azienda: { _eq: selectedAzienda.value } },
           limit: 1,
         },
       });
-      const rows = response?.data?.data ?? [];
-      const row = rows[0];
-      if (row) {
-        selectedClienteId.value = row.id ?? null;
-        selectedClienteIdUser.value = row.id_user ?? null;
-        chiamateAutomatiche.value = row.chiamate_automatiche === true || row.chiamate_automatiche === 1;
-        const value = row.id_google_fogli;
+      const clientiRows = clientiResponse?.data?.data ?? [];
+      const clienteRow = clientiRows[0];
+      if (clienteRow) {
+        selectedClienteId.value = clienteRow.id ?? null;
+        selectedClienteIdUser.value = clienteRow.id_user ?? null;
+      }
+      // Carica chiamate_automatiche e id_google_fogli da chiamate_outbound
+      const outboundFilter = { azienda: { _eq: selectedAzienda.value } };
+      if (selectedClienteIdUser.value != null) outboundFilter.id_user = { _eq: selectedClienteIdUser.value };
+      const outboundResponse = await api.get(`/items/${CHIAMATE_OUTBOUND_COLLECTION}`, {
+        params: {
+          fields: ['id', 'chiamate_automatiche', 'id_google_fogli'],
+          filter: outboundFilter,
+          limit: 1,
+        },
+      });
+      const outboundRows = outboundResponse?.data?.data ?? [];
+      const outboundRow = outboundRows[0];
+      if (outboundRow) {
+        selectedChiamateOutboundId.value = outboundRow.id ?? null;
+        chiamateAutomatiche.value = outboundRow.chiamate_automatiche === true || outboundRow.chiamate_automatiche === 1;
+        const value = outboundRow.id_google_fogli;
         if (value && typeof value === 'string' && value.trim()) {
           const url = value.trim();
           selectedGoogleFoglioUrl.value = url.startsWith('http') ? url : `https://docs.google.com/spreadsheets/d/${value}/edit`;
         }
       }
     } catch (err) {
-      console.error('Error loading id_google_fogli / chiamate_automatiche:', err);
+      console.error('Error loading clienti / chiamate_outbound:', err);
     }
   }
 
@@ -102,15 +120,28 @@ export function useOutboundShared(api) {
   }
 
   async function toggleChiamateAutomatiche() {
-    const id = selectedClienteId.value;
-    if (!id) return;
+    if (!selectedAzienda.value) return;
     chiamateAutomaticheLoading.value = true;
     const nextValue = !chiamateAutomatiche.value;
     try {
-      await api.patch(`/items/${CLIENTI_COLLECTION}/${id}`, { chiamate_automatiche: nextValue });
+      const outboundId = selectedChiamateOutboundId.value;
+      if (outboundId) {
+        await api.patch(`/items/${CHIAMATE_OUTBOUND_COLLECTION}/${outboundId}`, {
+          chiamate_automatiche: nextValue,
+        });
+      } else {
+        const payload = {
+          azienda: selectedAzienda.value,
+          id_user: selectedClienteIdUser.value ?? null,
+          chiamate_automatiche: nextValue,
+        };
+        const createRes = await api.post(`/items/${CHIAMATE_OUTBOUND_COLLECTION}`, payload);
+        const created = createRes?.data?.data;
+        if (created?.id) selectedChiamateOutboundId.value = created.id;
+      }
       chiamateAutomatiche.value = nextValue;
     } catch (err) {
-      console.error('Error updating chiamate_automatiche:', err);
+      console.error('Error updating chiamate_automatiche (chiamate_outbound):', err);
       const msg = err?.response?.data?.errors?.[0]?.message ?? err?.message ?? 'Impossibile aggiornare. Riprova.';
       chiamateAutomaticheError.value = msg;
       setTimeout(() => { chiamateAutomaticheError.value = null; }, 5000);
@@ -129,6 +160,7 @@ export function useOutboundShared(api) {
     selectedGoogleFoglioUrl,
     selectedClienteId,
     selectedClienteIdUser,
+    selectedChiamateOutboundId,
     chiamateAutomatiche,
     chiamateAutomaticheLoading,
     chiamateAutomaticheError,

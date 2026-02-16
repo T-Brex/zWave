@@ -1,22 +1,5 @@
 <template>
   <div class="details-sidebar">
-    <!-- Sezione Selezione Azienda in alto a destra -->
-    <div class="azienda-selection-top">
-      <v-button
-        v-tooltip="selectedAzienda ? 'Cambia azienda' : 'Seleziona azienda'"
-        :secondary="!!selectedAzienda"
-        :type="selectedAzienda ? 'secondary' : 'primary'"
-        @click="$emit('open-drawer')"
-        class="azienda-select-button"
-      >
-        <v-icon name="business" left />
-        <span class="azienda-button-text">
-          {{ selectedAzienda || 'Seleziona azienda' }}
-        </span>
-        <v-icon name="arrow_drop_down" right />
-      </v-button>
-    </div>
-    
     <div class="details-header">
       <h2>Dettagli Contatto</h2>
     </div>
@@ -224,7 +207,6 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['open-drawer']);
 
 const api = useApi();
 
@@ -549,98 +531,6 @@ onMounted(async () => {
   flex-direction: column;
   overflow: hidden;
   box-shadow: -1px 0 0 rgba(0, 0, 0, 0.05);
-}
-
-.azienda-selection-top {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 18px 16px;
-  border-bottom: 1px solid var(--border-color-subdued, #e5e7eb);
-  background: var(--background);
-  box-sizing: border-box;
-  overflow: visible;
-}
-
-.azienda-select-button {
-  width: 100%;
-  font-size: 13px;
-  font-weight: 600;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: visible;
-}
-
-.azienda-select-button :deep(.v-button) {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 12px 16px;
-  min-height: 44px;
-  width: 100%;
-  box-sizing: border-box;
-  border-radius: 10px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  overflow: visible;
-  line-height: 1.5;
-  border: 1px solid var(--border-color-subdued, #e5e7eb);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.azienda-select-button :deep(.v-button:hover) {
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.06);
-  transform: translateY(-1px);
-  border-color: var(--border-color, #d1d5db);
-}
-
-.azienda-select-button :deep(.v-button:active) {
-  transform: translateY(0);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.azienda-select-button :deep(.v-icon) {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  overflow: visible;
-  vertical-align: middle;
-  transition: all 0.2s ease;
-}
-
-.azienda-select-button :deep(.v-icon[name="business"]) {
-  color: inherit;
-  opacity: 0.85;
-  margin: 0;
-  padding: 0;
-}
-
-.azienda-select-button :deep(.v-icon[name="arrow_drop_down"]) {
-  color: inherit;
-  opacity: 0.65;
-  width: 18px;
-  height: 18px;
-  transition: transform 0.2s ease;
-}
-
-.azienda-select-button :deep(.v-button:hover .v-icon[name="arrow_drop_down"]) {
-  opacity: 0.85;
-}
-
-.azienda-button-text {
-  flex: 1;
-  text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-  letter-spacing: -0.01em;
-  font-size: 13px;
-  line-height: 1.4;
 }
 
 .details-header {

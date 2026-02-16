@@ -1,17 +1,5 @@
 <template>
-  <private-view>
-    <template #title>
-      <div class="module-header">
-        <div class="module-icon-wrapper">
-          <v-icon name="chat" class="module-icon" />
-        </div>
-        <div class="module-title-content">
-          <span class="module-subtitle">Contenuti</span>
-          <h1 class="module-title">Conversazioni</h1>
-        </div>
-      </div>
-    </template>
-
+  <private-view title="Conversazioni">
     <template #navigation>
       <v-list nav>
         <v-list-item
@@ -53,18 +41,16 @@
       </v-list>
     </template>
 
-    <!-- Drawer per selezione aziende -->
-    <AziendeDrawer
-      v-model="drawerOpen"
-      :available-aziende="availableAziende"
-      :selected-azienda="selectedAzienda"
-      :loading="loadingAziende"
-      :error="aziendeError"
-      @select="handleSelectAzienda"
-      @refresh="loadAziende"
-    />
+    <template #actions>
+      <CompanySelector
+        v-model="selectedClientId"
+        @selected="onAziendaSelected"
+      />
+    </template>
 
-    <div class="conversations-dashboard">
+    <div class="conversazioni-module-root">
+      <div class="header-separator" />
+      <div class="conversations-dashboard">
       <v-info
         v-if="conversationsError"
         type="danger"
@@ -115,9 +101,9 @@
           :active-conversation="activeConversation"
           :selected-azienda="selectedAzienda"
           :field-names="fieldNames"
-          @open-drawer="drawerOpen = true"
         />
       </div>
+    </div>
     </div>
 
     <!-- Dialog conferma eliminazione nota -->
@@ -150,30 +136,28 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import AziendeDrawer from './components/AziendeDrawer.vue';
+import CompanySelector from '../../common/components/CompanySelector.vue';
 import ConversationsList from './components/ConversationsList.vue';
 import ConversationChat from './components/ConversationChat.vue';
 import ContactDetails from './components/ContactDetails.vue';
-import { useAziende } from './composables/useAziende';
 import { useConversations } from './composables/useConversations';
 import { useNotes } from './composables/useNotes';
 import { getFieldNames } from './utils/conversationUtils';
 
-// Aziende
-const {
-  availableAziende,
-  selectedAzienda,
-  loadingAziende,
-  error: aziendeError,
-  loadAziende,
-  selectAzienda: selectAziendaUtil
-} = useAziende();
-
-const drawerOpen = ref(false);
+const selectedClientId = ref(null);
+const selectedAzienda = ref(null);
 const aziendaField = ref(null);
+const activeConversationId = ref(null);
+const activeConversation = ref(null);
 const route = useRoute();
+
+function onAziendaSelected(payload) {
+  selectedAzienda.value = payload?.azienda ?? null;
+  activeConversationId.value = null;
+  activeConversation.value = null;
+}
 
 const basePath = computed(() => route.path.replace(/\/(tabella|task)$/, ''));
 const isTableRoute = computed(() => route.path.endsWith('/tabella'));
@@ -196,10 +180,6 @@ const {
 } = useConversations(selectedAzienda, aziendaField, filters);
 
 const fieldNames = computed(() => conversationsFieldNames.value);
-
-// Active conversation
-const activeConversationId = ref(null);
-const activeConversation = ref(null);
 
 // Notes
 const {
@@ -238,14 +218,6 @@ watch([conversations, requestedConversationId], () => {
 }, { immediate: true });
 
 // Handlers
-async function handleSelectAzienda(azienda) {
-  selectAziendaUtil(azienda);
-  activeConversationId.value = null;
-  activeConversation.value = null;
-  drawerOpen.value = false;
-  await loadConversations();
-}
-
 async function selectConversation(conversation) {
   activeConversationId.value = conversation.id;
   activeConversation.value = conversation;
@@ -288,20 +260,8 @@ async function confirmDeleteNote() {
 }
 
 function retry() {
-  loadAziende();
+  loadConversations();
 }
-
-// Lifecycle
-onMounted(async () => {
-  await loadAziende();
-  if (availableAziende.value.length > 0 && !selectedAzienda.value) {
-    await handleSelectAzienda(availableAziende.value[0].value);
-    return;
-  }
-  if (selectedAzienda.value) {
-    await loadConversations();
-  }
-});
 
 watch(
   () => selectedAzienda.value,
@@ -314,78 +274,37 @@ watch(
 
 <style scoped>
 .conversations-dashboard {
+  flex: 1;
+  min-height: 0;
   display: flex;
-  height: 100%;
-  min-height: 100%;
+  flex-direction: column;
   width: 100%;
   overflow: hidden;
   background: var(--background-page);
   box-sizing: border-box;
 }
 
-.dashboard-content {
+.conversazioni-module-root {
   display: flex;
-  width: 100%;
+  flex-direction: column;
   height: 100%;
+  min-height: 100%;
+  width: 100%;
   overflow: hidden;
 }
 
-/* Header del modulo con icona - Stile Professionale */
-.module-header {
+.dashboard-content {
+  flex: 1;
+  min-height: 0;
   display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0;
+  width: 100%;
+  overflow: hidden;
 }
 
-.module-icon-wrapper {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(94, 114, 228, 0.1) 0%, rgba(168, 184, 216, 0.1) 100%);
-  border: 1px solid rgba(94, 114, 228, 0.15);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(94, 114, 228, 0.1);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.module-icon-wrapper svg {
-  width: 24px;
-  height: 24px;
-  color: #5e72e4;
-}
-
-.module-icon {
-  width: 24px;
-  height: 24px;
-  color: #5e72e4;
-}
-
-.module-title-content {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.module-subtitle {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--foreground-subdued, #6b7280);
-  line-height: 1.4;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-}
-
-.module-title {
-  margin: 0;
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--foreground, #1f2937);
-  line-height: 1.2;
-  letter-spacing: -0.6px;
+.header-separator {
+  height: 1px;
+  background: #dadada;
+  margin: 0 24px;
 }
 
 /* Navigation - Stile Directus */

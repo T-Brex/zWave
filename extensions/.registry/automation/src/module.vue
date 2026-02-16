@@ -12,67 +12,16 @@
 				</v-list-item>
 			</v-list>
 		</template>
+		<template #actions>
+			<CompanySelector
+				v-model="selectedClientId"
+				@selected="onAziendaSelected"
+			/>
+		</template>
 
-		<!-- Drawer selezione azienda (come Approfondimenti / Deviazione Chiamate) -->
-		<v-drawer v-model="drawerOpen" side="right" :title="drawerTitle" width="320">
-			<div class="drawer-content">
-				<div class="drawer-header">
-					<div class="drawer-header-title">
-						<v-icon name="business" />
-						<span>Seleziona Azienda</span>
-					</div>
-					<v-button icon secondary @click="loadList" :loading="loading">
-						<v-icon name="refresh" />
-					</v-button>
-				</div>
-				<v-info
-					v-if="aziendeList.length === 0 && !loading"
-					icon="info"
-					title="Nessuna azienda"
-					text="Nessuna azienda nella collection clienti. Verifica il campo azienda."
-				/>
-				<v-list v-else nav class="aziende-list">
-					<v-list-item
-						v-for="azienda in aziendeList"
-						:key="azienda"
-						class="azienda-item"
-						:class="{ 'azienda-item--active': selectedAzienda === azienda }"
-						@click="selectAzienda(azienda)"
-					>
-						<v-list-item-icon>
-							<v-icon :name="selectedAzienda === azienda ? 'check_circle' : 'business'" />
-						</v-list-item-icon>
-						<v-list-item-content>
-							<v-list-item-title>{{ azienda || 'Senza nome' }}</v-list-item-title>
-						</v-list-item-content>
-						<v-list-item-icon v-if="selectedAzienda === azienda">
-							<v-icon name="check" />
-						</v-list-item-icon>
-					</v-list-item>
-				</v-list>
-				<div v-if="selectedAzienda" class="selected-azienda-info">
-					<div class="selected-azienda-label">Azienda selezionata:</div>
-					<div class="selected-azienda-name">
-						<v-icon name="check_circle" />
-						<span>{{ selectedAzienda }}</span>
-					</div>
-				</div>
-			</div>
-		</v-drawer>
-
-		<div class="whatsapp-view">
-			<header class="whatsapp-header">
-				<v-button
-					class="azienda-select-btn"
-					:secondary="!!selectedAzienda"
-					:type="selectedAzienda ? 'secondary' : 'primary'"
-					@click="drawerOpen = true"
-				>
-					<v-icon name="business" left />
-					<span>{{ selectedAzienda || 'Seleziona azienda' }}</span>
-					<v-icon name="arrow_drop_down" right />
-				</v-button>
-			</header>
+		<div class="automation-module-root">
+			<div class="header-separator" />
+			<div class="whatsapp-view">
 
 			<div v-if="loading" class="list-loading">
 				<v-progress-circular indeterminate />
@@ -174,6 +123,7 @@
 				:text="noNumeroMessage"
 				class="prompt-info"
 			/>
+			</div>
 		</div>
 	</private-view>
 </template>
@@ -181,10 +131,10 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
 import { useApi } from '@directus/extensions-sdk';
+import CompanySelector from '../../common/components/CompanySelector.vue';
 
 const api = useApi();
 const CLIENTI_COLLECTION = 'clienti';
-const STORAGE_KEY = 'settings_whatsapp_selected_azienda';
 
 /** Prefissi paese: Italia in testa (default), poi ordine alfabetico per nome paese (per parsing si ordina per lunghezza dove serve) */
 const _prefixOptionsRaw = [
@@ -232,8 +182,28 @@ const prefixOptions = [_prefixOptionsRaw[0], ..._prefixOptionsRaw.slice(1).sort(
 const primaryByAzienda = ref({});
 const loading = ref(false);
 const error = ref(null);
+const selectedClientId = ref(null);
 const selectedAzienda = ref(null);
-const drawerOpen = ref(false);
+
+function onAziendaSelected(payload) {
+	selectedAzienda.value = payload?.azienda ?? null;
+}
+
+// Sincronizza selectedAzienda con primaryByAzienda usando l'ID cliente (gestisce timing e formati diversi)
+watch(
+	[selectedClientId, () => primaryByAzienda.value],
+	([clientId, _byAzienda]) => {
+		if (!clientId || !primaryByAzienda.value || Object.keys(primaryByAzienda.value).length === 0) return;
+		const idStr = String(clientId);
+		for (const [key, primary] of Object.entries(primaryByAzienda.value)) {
+			if (String(primary?.id) === idStr) {
+				selectedAzienda.value = key;
+				return;
+			}
+		}
+	},
+	{ immediate: true }
+);
 const isEditing = ref(false);
 /** Indice del numero in modifica (null = aggiunta nuovo) */
 const editingIndex = ref(null);
@@ -248,7 +218,6 @@ const saveSuccessMessage = ref('');
 const promptSelectAzienda = 'Clicca su "Seleziona azienda" per scegliere l\'agenzia e gestire i numeri WhatsApp per l\'invio del riassunto.';
 const noNumeroMessage = computed(() => `Nessun record cliente per l\'azienda «${selectedAzienda.value ?? ''}». Verifica la collection clienti.`);
 
-const drawerTitle = computed(() => `Aziende (${aziendeList.value.length})`);
 const aziendeList = computed(() => Object.keys(primaryByAzienda.value).sort());
 /** Normalizza il nome per il confronto (trim + spazi multipli → uno) */
 function normalizeAziendaName(s) {
@@ -404,12 +373,6 @@ async function removeNumber(index) {
 	}
 }
 
-function selectAzienda(azienda) {
-	selectedAzienda.value = azienda;
-	try { localStorage.setItem(STORAGE_KEY, azienda); } catch (_) {}
-	drawerOpen.value = false;
-}
-
 async function loadList() {
 	loading.value = true;
 	error.value = null;
@@ -430,13 +393,6 @@ async function loadList() {
 			if (a && !byAzienda[a]) byAzienda[a] = { id: row.id, telefono: row.telefono };
 		}
 		primaryByAzienda.value = byAzienda;
-
-		if (aziendeList.value.length > 0 && selectedAzienda.value === null) {
-			try {
-				const saved = localStorage.getItem(STORAGE_KEY);
-				if (saved && aziendeList.value.includes(saved)) selectedAzienda.value = saved;
-			} catch (_) {}
-		}
 	} catch (err) {
 		const msg = err?.response?.data?.errors?.[0]?.message ?? err?.message ?? 'Impossibile caricare.';
 		error.value = msg;
@@ -517,29 +473,19 @@ onMounted(() => loadList());
 .nav-item .nav-icon-whatsapp-svg { color: var(--foreground-subdued, #5f6368); }
 .nav-item.nav-item--active .nav-icon-whatsapp-svg { color: var(--foreground, #1a1a1a); }
 
-.drawer-content { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.drawer-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border-normal, #e8e8e8); }
-.drawer-header-title { display: flex; align-items: center; gap: 8px; font-weight: 600; }
-.aziende-list { flex: 1; overflow-y: auto; }
-.azienda-item { cursor: pointer; transition: all 0.2s ease; }
-.azienda-item:hover { background: var(--background-subdued, #f9fafb); }
-.azienda-item--active { background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%); border-radius: 8px; }
-.azienda-item--active :deep(.v-list-item-content) { font-weight: 600; }
-.selected-azienda-info { margin-top: auto; padding: 16px; border-top: 1px solid var(--border-normal, #e8e8e8); }
-.selected-azienda-label { font-size: 12px; color: var(--foreground-subdued, #5f6368); margin-bottom: 4px; }
-.selected-azienda-name { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.automation-module-root {
+	width: 100%;
+	min-width: 0;
+	overflow-x: hidden;
+}
+
+.header-separator {
+	height: 1px;
+	background: #dadada;
+	margin: 0 24px;
+}
 
 .whatsapp-view { padding: 24px 32px; min-height: 400px; }
-
-.whatsapp-header {
-	display: flex;
-	justify-content: flex-end;
-	align-items: center;
-	margin-bottom: 28px;
-	padding-bottom: 16px;
-	border-bottom: 1px solid var(--border-subdued, #eee);
-}
-.azienda-select-btn { flex-shrink: 0; }
 
 .list-loading {
 	display: flex;
