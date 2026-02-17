@@ -11,7 +11,7 @@ RUN set -e; \
   for dir in extensions/.registry/*/; do \
     if [ -f "${dir}package.json" ]; then \
       echo "Building extension: $dir"; \
-      (cd "$dir" && npm install && npm run build && rm -rf node_modules); \ \
+      (cd "$dir" && npm install && npm run build && rm -rf node_modules); \
     fi; \
   done
 
