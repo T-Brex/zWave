@@ -16,7 +16,7 @@ RUN set -e; \
   done
 
 # Stage 2: immagine Directus con estensioni già compilate
-FROM directus/directus:11.14.1
+FROM directus/directus:latest
 
 # Copia le estensioni (con dist/) dallo stage di build
 COPY --from=extensions-builder /build/extensions /directus/extensions
